@@ -1,8 +1,30 @@
+import { useState } from 'react'
+import { Scene } from './three/Scene'
+import { HUD } from './ui/HUD'
+import { Menu } from './ui/Menu'
+import { PromotionPicker } from './ui/PromotionPicker'
+import { useGameStore } from './game/store'
+
+type Screen = 'menu' | 'game'
+
 function App() {
+  const [screen, setScreen] = useState<Screen>('menu')
+  const newGame = useGameStore((s) => s.newGame)
+
+  const startGame = () => {
+    newGame()
+    setScreen('game')
+  }
+
+  if (screen === 'menu') {
+    return <Menu onStart={startGame} />
+  }
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#1a1a2e] text-center text-white">
-      <h1 className="text-5xl font-bold tracking-tight">Battleground Chess</h1>
-      <p className="mt-4 text-lg text-gray-400">Scaffold OK</p>
+    <div className="relative h-dvh w-screen overflow-hidden bg-[#0b0d12]">
+      <Scene />
+      <HUD />
+      <PromotionPicker />
     </div>
   )
 }

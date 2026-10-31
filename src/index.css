@@ -1,1 +1,25 @@
 @import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background-color: #0b0d12;
+}
+
+body {
+  /* Prevent mobile rubber-band scrolling over the 3D canvas. */
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The R3F canvas should fill its container and accept touch gestures. */
+canvas {
+  display: block;
+  touch-action: none;
+}
