@@ -1,6 +1,9 @@
 import { create } from 'zustand'
 import { Chess } from 'chess.js'
 import type { Color, Move, PieceSymbol, Square } from 'chess.js'
+import { createPieceTracker } from './pieceTracker'
+import { directMove } from '../anim/director'
+import type { ActorId, ActorSnapshot, AnimCommand } from './types'
 
 /** A single occupied square, flattened from chess.js board(). */
 export type BoardSquare = { square: Square; type: PieceSymbol; color: Color }
@@ -23,6 +26,12 @@ export type GameState = {
   // ---- reactive, derived snapshots (components subscribe to these) ----
   /** Flat list of occupied squares, refreshed after every mutation. */
   boardSnapshot: BoardSquare[]
+  /** Persistent 3D actor identities, refreshed after every mutation. */
+  actors: ActorSnapshot[]
+  /** Animation commands for the most recent move (empty when settled). */
+  animCommands: AnimCommand[]
+  /** True while any actor is still animating the current move. */
+  inputLocked: boolean
   /** Side to move. */
   turn: Color
   /** High-level status derived from chess.js predicates. */
@@ -61,6 +70,12 @@ export type GameState = {
   newGame: () => void
   /** Toggle pass-and-play camera auto-flip. */
   toggleAutoFlip: () => void
+
+  // ---- animation lifecycle ----
+  /** One actor finished its walk; releases the lock once all have settled. */
+  settleActor: (id: ActorId) => void
+  /** Force every outstanding animation to settle immediately (unlock input). */
+  settleAnimations: () => void
 }
 
 /** Flatten chess.js board() (8x8 of null | piece) into occupied squares only. */
@@ -100,10 +115,25 @@ function derived(game: Chess) {
 
 export const useGameStore = create<GameState>((set, get) => {
   const game = new Chess()
+  const tracker = createPieceTracker()
+  tracker.syncFromBoard(game.board())
+
+  // Actors still mid-walk for the current move. Non-reactive: the reactive
+  // mirror is `inputLocked`. Reassigned (not mutated) on each new move batch.
+  let pendingSettle = new Set<ActorId>()
+
+  /** Clear tracker to a fresh identity set from the live board (undo / reset). */
+  function rebuildFromBoard() {
+    tracker.syncFromBoard(game.board())
+    pendingSettle = new Set()
+  }
 
   return {
     game,
     ...derived(game),
+    actors: tracker.actors(),
+    animCommands: [],
+    inputLocked: false,
     selectedSquare: null,
     pendingPromotion: null,
     autoFlip: true,
@@ -122,7 +152,18 @@ export const useGameStore = create<GameState>((set, get) => {
       const g = get().game
       try {
         const move = g.move({ from, to, promotion: promo })
-        set({ ...derived(g), selectedSquare: null, pendingPromotion: null })
+        // Advance piece identities, then script the walk for the pieces that moved.
+        tracker.applyMove(move)
+        const commands = directMove(move, (sq) => tracker.actorIdAt(sq))
+        pendingSettle = new Set(commands.map((c) => c.actorId))
+        set({
+          ...derived(g),
+          actors: tracker.actors(),
+          animCommands: commands,
+          inputLocked: pendingSettle.size > 0,
+          selectedSquare: null,
+          pendingPromotion: null,
+        })
         return move
       } catch {
         // chess.js throws on an illegal move — report it as rejected.
@@ -131,7 +172,9 @@ export const useGameStore = create<GameState>((set, get) => {
     },
 
     handleTap: (square) => {
-      const { game: g, selectedSquare } = get()
+      const { game: g, selectedSquare, inputLocked } = get()
+      // Taps are ignored while pieces are still animating a move.
+      if (inputLocked) return
       const turn = g.turn()
       const piece = g.get(square)
 
@@ -189,16 +232,44 @@ export const useGameStore = create<GameState>((set, get) => {
     undo: () => {
       const g = get().game
       const undone = g.undo()
-      set({ ...derived(g), selectedSquare: null, pendingPromotion: null })
+      // Undo rebuilds identities from scratch (no replay animation), per plan.
+      rebuildFromBoard()
+      set({
+        ...derived(g),
+        actors: tracker.actors(),
+        animCommands: [],
+        inputLocked: false,
+        selectedSquare: null,
+        pendingPromotion: null,
+      })
       return undone
     },
 
     newGame: () => {
       const g = get().game
       g.reset()
-      set({ ...derived(g), selectedSquare: null, pendingPromotion: null })
+      rebuildFromBoard()
+      set({
+        ...derived(g),
+        actors: tracker.actors(),
+        animCommands: [],
+        inputLocked: false,
+        selectedSquare: null,
+        pendingPromotion: null,
+      })
     },
 
     toggleAutoFlip: () => set((s) => ({ autoFlip: !s.autoFlip })),
+
+    settleActor: (id) => {
+      if (!pendingSettle.has(id)) return
+      pendingSettle.delete(id)
+      if (pendingSettle.size === 0) set({ inputLocked: false, animCommands: [] })
+    },
+
+    settleAnimations: () => {
+      pendingSettle = new Set()
+      set({ inputLocked: false, animCommands: [] })
+    },
   }
 })

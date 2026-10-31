@@ -7,12 +7,21 @@ beforeEach(() => {
   useGameStore.getState().newGame()
 })
 
-/** Drive a list of [from, to] moves through the public tap path. */
+/**
+ * Drive a list of [from, to] moves through the public tap path.
+ *
+ * A committed move sets `inputLocked` (pieces are "animating"); in the real app
+ * the render loop calls `settleActor` when each walk finishes, which releases
+ * the lock before the next tap. Tests have no render loop, so we settle
+ * animations after each move to model that — otherwise the lock would swallow
+ * every subsequent tap. `settleAnimations()` is a no-op when nothing is locked.
+ */
 function playTaps(moves: [Square, Square][]) {
   const store = useGameStore.getState
   for (const [from, to] of moves) {
     store().handleTap(from)
     store().handleTap(to)
+    store().settleAnimations()
   }
 }
 
@@ -293,5 +302,91 @@ describe('game store — new game + auto-flip', () => {
     expect(useGameStore.getState().autoFlip).toBe(false)
     useGameStore.getState().toggleAutoFlip()
     expect(useGameStore.getState().autoFlip).toBe(true)
+  })
+})
+
+describe('game store — input lock + actors (Phase 2)', () => {
+  it('starts unlocked with 32 living actors and no pending commands', () => {
+    const s = useGameStore.getState()
+    expect(s.inputLocked).toBe(false)
+    expect(s.animCommands).toEqual([])
+    expect(s.actors).toHaveLength(32)
+    expect(s.actors.every((a) => a.alive)).toBe(true)
+  })
+
+  it('tryMove locks input and emits an anim command for the mover', () => {
+    const move = useGameStore.getState().tryMove('e2', 'e4')
+    const s = useGameStore.getState()
+    expect(move).not.toBeNull()
+    expect(s.inputLocked).toBe(true)
+    expect(s.animCommands).toHaveLength(1)
+    expect(s.animCommands[0]).toMatchObject({ from: 'e2', to: 'e4', type: 'move' })
+  })
+
+  it('ignores taps while input is locked', () => {
+    useGameStore.getState().tryMove('e2', 'e4') // white moves → locked
+    expect(useGameStore.getState().inputLocked).toBe(true)
+
+    // Black tries to select/move while the animation is "playing" — ignored.
+    useGameStore.getState().handleTap('e7')
+    expect(useGameStore.getState().selectedSquare).toBeNull()
+    useGameStore.getState().handleTap('e5')
+    expect(useGameStore.getState().moveHistory).toEqual(['e4']) // no 2nd move
+  })
+
+  it('settleActor releases the lock only after every mover has settled', () => {
+    // Castling emits two simultaneous commands (king + rook).
+    playTaps([
+      ['e2', 'e4'],
+      ['e7', 'e5'],
+      ['g1', 'f3'],
+      ['b8', 'c6'],
+      ['f1', 'c4'],
+      ['f8', 'c5'],
+    ])
+    useGameStore.getState().tryMove('e1', 'g1') // O-O, no settle yet
+    const s = useGameStore.getState()
+    expect(s.inputLocked).toBe(true)
+    expect(s.animCommands).toHaveLength(2)
+
+    const [c1, c2] = s.animCommands
+    useGameStore.getState().settleActor(c1.actorId)
+    expect(useGameStore.getState().inputLocked).toBe(true) // one still walking
+    useGameStore.getState().settleActor(c2.actorId)
+    expect(useGameStore.getState().inputLocked).toBe(false) // all settled
+    expect(useGameStore.getState().animCommands).toEqual([])
+  })
+
+  it('settleAnimations clears the lock and commands immediately', () => {
+    useGameStore.getState().tryMove('d2', 'd4')
+    expect(useGameStore.getState().inputLocked).toBe(true)
+    useGameStore.getState().settleAnimations()
+    const s = useGameStore.getState()
+    expect(s.inputLocked).toBe(false)
+    expect(s.animCommands).toEqual([])
+  })
+
+  it('actors mirror the board: a capture drops a living actor', () => {
+    playTaps([
+      ['e2', 'e4'],
+      ['d7', 'd5'],
+    ])
+    expect(useGameStore.getState().actors.filter((a) => a.alive)).toHaveLength(32)
+    playTaps([['e4', 'd5']]) // exd5 capture
+    const living = useGameStore.getState().actors.filter((a) => a.alive)
+    expect(living).toHaveLength(31)
+  })
+
+  it('newGame and undo reset the lock', () => {
+    useGameStore.getState().tryMove('e2', 'e4')
+    expect(useGameStore.getState().inputLocked).toBe(true)
+    useGameStore.getState().newGame()
+    expect(useGameStore.getState().inputLocked).toBe(false)
+    expect(useGameStore.getState().actors).toHaveLength(32)
+
+    useGameStore.getState().tryMove('e2', 'e4')
+    expect(useGameStore.getState().inputLocked).toBe(true)
+    useGameStore.getState().undo()
+    expect(useGameStore.getState().inputLocked).toBe(false)
   })
 })

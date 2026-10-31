@@ -3,7 +3,7 @@ import type { ThreeEvent } from '@react-three/fiber'
 import type { Square } from 'chess.js'
 import { useGameStore } from '../game/store'
 import { BOARD_LAYOUT, squareToXZ } from './coords'
-import { PlaceholderPiece } from './pieces/PlaceholderPiece'
+import { Army } from './pieces/Army'
 
 const NO_RAYCAST = () => null
 
@@ -12,11 +12,11 @@ const TILE_LIGHT = '#9aa0ab'
 const TILE_DARK = '#5b616c'
 
 export function Board() {
-  const boardSnapshot = useGameStore((s) => s.boardSnapshot)
   const selectedSquare = useGameStore((s) => s.selectedSquare)
   const moveCount = useGameStore((s) => s.moveHistory.length)
   const legalMoves = useGameStore((s) => s.legalMoves)
   const handleTap = useGameStore((s) => s.handleTap)
+  const inputLocked = useGameStore((s) => s.inputLocked)
 
   // Target squares reachable from the current selection. Recomputed when the
   // selection or the position (move count) changes. Deduped because a promoting
@@ -33,6 +33,9 @@ export function Board() {
     e.stopPropagation()
     handleTap(square)
   }
+
+  // While pieces are walking, hide selection/target rings (input is locked too).
+  const showHighlights = !inputLocked
 
   return (
     <group>
@@ -59,7 +62,8 @@ export function Board() {
       ))}
 
       {/* Selected-square highlight (amber ring). */}
-      {selectedSquare &&
+      {showHighlights &&
+        selectedSquare &&
         (() => {
           const [x, z] = squareToXZ(selectedSquare)
           return (
@@ -71,30 +75,24 @@ export function Board() {
         })()}
 
       {/* Legal-move target rings (green). */}
-      {targets.map((sq) => {
-        const [x, z] = squareToXZ(sq)
-        return (
-          <mesh
-            key={`t-${sq}`}
-            raycast={NO_RAYCAST}
-            position={[x, 0.02, z]}
-            rotation={[-Math.PI / 2, 0, 0]}
-          >
-            <ringGeometry args={[0.33, 0.44, 32]} />
-            <meshBasicMaterial color="#39d98a" transparent opacity={0.85} />
-          </mesh>
-        )
-      })}
+      {showHighlights &&
+        targets.map((sq) => {
+          const [x, z] = squareToXZ(sq)
+          return (
+            <mesh
+              key={`t-${sq}`}
+              raycast={NO_RAYCAST}
+              position={[x, 0.02, z]}
+              rotation={[-Math.PI / 2, 0, 0]}
+            >
+              <ringGeometry args={[0.33, 0.44, 32]} />
+              <meshBasicMaterial color="#39d98a" transparent opacity={0.85} />
+            </mesh>
+          )
+        })}
 
-      {/* Pieces. */}
-      {boardSnapshot.map((p) => {
-        const [x, z] = squareToXZ(p.square)
-        return (
-          <group key={p.square} position={[x, 0, z]}>
-            <PlaceholderPiece type={p.type} color={p.color} />
-          </group>
-        )
-      })}
+      {/* Persistent piece actors — animate between squares, keyed by actor id. */}
+      <Army />
     </group>
   )
 }
