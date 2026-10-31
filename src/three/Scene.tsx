@@ -5,6 +5,8 @@ import { CameraRig } from './CameraRig'
 /**
  * 3D scene: Canvas, lights and a dark environment (no network HDR — lighting is
  * done with hemisphere + directional lights so the app stays fully offline).
+ * Ancient-warfare warmth: a sun-warm key light and a warm-neutral sky over the
+ * sand arena, with the cool fill kept as a rim so silhouettes still separate.
  */
 export function Scene() {
   return (
@@ -14,9 +16,9 @@ export function Scene() {
       gl={{ antialias: true }}
     >
       <color attach="background" args={['#0b0d12']} />
-      <hemisphereLight intensity={0.55} color="#aab4cc" groundColor="#15171d" />
+      <hemisphereLight intensity={0.55} color="#bdb6a8" groundColor="#17140f" />
       <ambientLight intensity={0.25} />
-      <directionalLight position={[6, 12, 6]} intensity={1.15} />
+      <directionalLight position={[6, 12, 6]} intensity={1.15} color="#fff1de" />
       <directionalLight position={[-6, 8, -4]} intensity={0.45} color="#9fb4e0" />
       <Board />
       <CameraRig />

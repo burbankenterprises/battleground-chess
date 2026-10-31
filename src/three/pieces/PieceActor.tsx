@@ -14,7 +14,7 @@ import { squareToXZ } from '../coords'
 import { ALARM_RAMP_MS, actorPoseAt, withAlarm } from './actorPose'
 import type { ActorPose } from './actorPose'
 import { PIECE_DIMS } from './pieceDims'
-import { PlaceholderPiece } from './PlaceholderPiece'
+import { WarfarePiece } from './WarfarePiece'
 
 /**
  * PieceActor — one persistent 3D piece. It never decides WHAT happens: the
@@ -27,12 +27,13 @@ import { PlaceholderPiece } from './PlaceholderPiece'
  *       └ tilt (axis-angle rotation about that rim point: lean / topple / wobble)
  *          └ unpivot
  *             └ scaler (squash / promotion scale about the base center; tint)
- *                ├ pre-swap  PlaceholderPiece(fromType)   — only during a promotion
- *                └ current   PlaceholderPiece(actor.type)
+ *                ├ pre-swap  WarfarePiece(fromType)   — only during a promotion
+ *                └ current   WarfarePiece(actor.type)
  *
  * When every one-shot command of the current batch has finished it reports
  * `onSettled(id, seq)` once, so the store can release the input lock.
- * Visuals stay PlaceholderPiece — real models arrive in Phase 4.
+ * Visuals are the procedural ancient-warfare models (Phase 4, models.ts); each
+ * slot owns its materials, so applyTint never leaks between actors.
  */
 
 type Props = {
@@ -204,11 +205,11 @@ export function PieceActor({ actor, commands, seq, startedAt, onSettled }: Props
             <group ref={scalerRef}>
               {promotion && (
                 <group key="pre-swap" ref={preSwapRef}>
-                  <PlaceholderPiece type={promotion.fromType} color={actor.color} />
+                  <WarfarePiece type={promotion.fromType} color={actor.color} />
                 </group>
               )}
               <group key="current" ref={currentRef} visible={!promotion}>
-                <PlaceholderPiece type={actor.type} color={actor.color} />
+                <WarfarePiece type={actor.type} color={actor.color} />
               </group>
             </group>
           </group>

@@ -3,14 +3,11 @@ import type { ThreeEvent } from '@react-three/fiber'
 import type { Square } from 'chess.js'
 import { useGameStore } from '../game/store'
 import { BOARD_LAYOUT, squareToXZ } from './coords'
+import { ARENA_PLATE_COLOR, TILE_COLORS, TILE_DARK, TILE_LIGHT } from './boardTheme'
 import { Army } from './pieces/Army'
 import { BattleEffects } from './effects/BattleEffects'
 
 const NO_RAYCAST = () => null
-
-/** Tile surface colors (dark theme, readable contrast with both armies). */
-const TILE_LIGHT = '#9aa0ab'
-const TILE_DARK = '#5b616c'
 
 export function Board() {
   const selectedSquare = useGameStore((s) => s.selectedSquare)
@@ -40,10 +37,10 @@ export function Board() {
 
   return (
     <group>
-      {/* Base plate under the tiles. */}
+      {/* Sand/stone arena base plate under the tiles. */}
       <mesh raycast={NO_RAYCAST} position={[0, -0.26, 0]}>
         <boxGeometry args={[8.5, 0.3, 8.5]} />
-        <meshStandardMaterial color="#23262c" metalness={0.2} roughness={0.8} />
+        <meshStandardMaterial color={ARENA_PLATE_COLOR} metalness={0} roughness={0.95} />
       </mesh>
 
       {/* 8x8 tiles — each full tile is the tap target (>=44px effective). */}
@@ -55,9 +52,9 @@ export function Board() {
         >
           <boxGeometry args={[0.98, 0.2, 0.98]} />
           <meshStandardMaterial
-            color={light ? TILE_LIGHT : TILE_DARK}
-            metalness={0.05}
-            roughness={0.9}
+            color={TILE_COLORS.get(square) ?? (light ? TILE_LIGHT : TILE_DARK)}
+            metalness={0}
+            roughness={0.92}
           />
         </mesh>
       ))}
