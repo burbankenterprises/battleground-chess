@@ -1,6 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PieceSymbol, Square } from 'chess.js'
-import { useGameStore } from './store'
+import { LOCK_WATCHDOG_GRACE_MS, useGameStore } from './store'
+import { sequenceDurationMs } from '../anim/director'
+import type { AnimCommand } from './types'
 
 /** Fresh store state before each test. */
 beforeEach(() => {
@@ -388,5 +390,339 @@ describe('game store — input lock + actors (Phase 2)', () => {
     expect(useGameStore.getState().inputLocked).toBe(true)
     useGameStore.getState().undo()
     expect(useGameStore.getState().inputLocked).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Phase 3 — battle sequences through the store
+// ---------------------------------------------------------------------------
+
+/**
+ * Model the render loop for the CURRENT batch: each actor reports settled
+ * once all of its one-shot commands have finished. Settles actors in order of
+ * when their last one-shot command ends, so the lock is observable mid-way.
+ * Returns the order in which actors were settled.
+ */
+function settleBatchInTimelineOrder(): string[] {
+  const s = useGameStore.getState()
+  const seq = s.animSeq
+  const endById = new Map<string, number>()
+  for (const c of s.animCommands) {
+    if (c.type === 'alarm') continue
+    endById.set(c.actorId, Math.max(endById.get(c.actorId) ?? 0, c.delayMs + c.durationMs))
+  }
+  const order = [...endById.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id)
+  for (const id of order) useGameStore.getState().settleActor(id, seq)
+  return order
+}
+
+function commandsOfType<T extends AnimCommand['type']>(type: T) {
+  return useGameStore
+    .getState()
+    .animCommands.filter((c): c is Extract<AnimCommand, { type: T }> => c.type === type)
+}
+
+describe('game store — Phase 3 capture battle', () => {
+  it('inputLocked spans the full battle sequence; the defender is removed at the end', () => {
+    playTaps([
+      ['e2', 'e4'],
+      ['d7', 'd5'],
+    ])
+    const before = useGameStore.getState()
+    const attackerId = before.actors.find((a) => a.square === 'e4' && a.alive)!.id
+    const victimId = before.actors.find((a) => a.square === 'd5' && a.alive)!.id
+
+    useGameStore.getState().tryMove('e4', 'd5')
+    let s = useGameStore.getState()
+    expect(s.inputLocked).toBe(true)
+    expect(s.animCommands.map((c) => c.type)).toEqual(['move', 'lunge', 'death', 'settle-impact'])
+
+    // The defender is dead in the tracker but still in the scene playing its death.
+    expect(s.actors.find((a) => a.id === victimId)?.alive).toBe(false)
+    expect(s.sceneActors.map((a) => a.id)).toContain(victimId)
+    expect(s.sceneActors).toHaveLength(32)
+    // One camera micro-shake cue on the impact frame.
+    const death = commandsOfType('death')[0]
+    expect(s.cameraShakes).toHaveLength(1)
+    expect(s.cameraShakes[0].delayMs).toBe(death.delayMs)
+
+    // The attacker's settle finishes BEFORE the defender's death: still locked.
+    const attackerEnd = Math.max(
+      ...s.animCommands
+        .filter((c) => c.actorId === attackerId)
+        .map((c) => c.delayMs + c.durationMs),
+    )
+    expect(attackerEnd).toBeLessThan(death.delayMs + death.durationMs)
+    useGameStore.getState().settleActor(attackerId, s.animSeq)
+    s = useGameStore.getState()
+    expect(s.inputLocked).toBe(true)
+    expect(s.sceneActors.map((a) => a.id)).toContain(victimId)
+
+    // Taps are ignored while the battle plays out.
+    useGameStore.getState().handleTap('e7')
+    expect(useGameStore.getState().selectedSquare).toBeNull()
+
+    // The death finishes → sequence settles: unlocked, defender removed from the scene.
+    useGameStore.getState().settleActor(victimId, s.animSeq)
+    s = useGameStore.getState()
+    expect(s.inputLocked).toBe(false)
+    expect(s.animCommands).toEqual([])
+    expect(s.cameraShakes).toEqual([])
+    expect(s.sceneActors.map((a) => a.id)).not.toContain(victimId)
+    expect(s.sceneActors).toHaveLength(31)
+    expect(s.sceneActors.every((a) => a.alive)).toBe(true)
+  })
+
+  it('ignores a settle from a stale batch', () => {
+    useGameStore.getState().tryMove('e2', 'e4')
+    const oldSeq = useGameStore.getState().animSeq
+    const moverId = useGameStore.getState().animCommands[0].actorId
+    useGameStore.getState().settleAnimations()
+    useGameStore.getState().tryMove('e7', 'e5')
+    expect(useGameStore.getState().inputLocked).toBe(true)
+    // A late report from the previous batch must not unlock the new one.
+    useGameStore.getState().settleActor(moverId, oldSeq)
+    expect(useGameStore.getState().inputLocked).toBe(true)
+  })
+})
+
+describe('game store — Phase 3 en passant', () => {
+  it('kills the right pawn (beside the destination) on the impact frame', () => {
+    playTaps([
+      ['e2', 'e4'],
+      ['g8', 'f6'],
+      ['e4', 'e5'],
+      ['d7', 'd5'],
+    ])
+    const before = useGameStore.getState()
+    const attackerId = before.actors.find((a) => a.square === 'e5' && a.alive)!.id
+    const d5PawnId = before.actors.find((a) => a.square === 'd5' && a.alive)!.id
+
+    useGameStore.getState().tryMove('e5', 'd6')
+    const s = useGameStore.getState()
+    const lunge = commandsOfType('lunge')[0]
+    const death = commandsOfType('death')[0]
+    expect(lunge).toMatchObject({ actorId: attackerId, to: 'd6' }) // lunge to the EMPTY square
+    expect(death).toMatchObject({ actorId: d5PawnId, square: 'd5' }) // the adjacent pawn dies
+    expect(death.delayMs).toBe(lunge.delayMs + lunge.durationMs) // on impact
+    expect(s.actors.find((a) => a.id === d5PawnId)).toMatchObject({ alive: false, square: 'd5' })
+    expect(s.actors.find((a) => a.id === attackerId)).toMatchObject({ alive: true, square: 'd6' })
+    // No other actor died.
+    expect(s.actors.filter((a) => !a.alive).map((a) => a.id)).toEqual([d5PawnId])
+
+    expect(s.inputLocked).toBe(true)
+    settleBatchInTimelineOrder()
+    const after = useGameStore.getState()
+    expect(after.inputLocked).toBe(false)
+    expect(after.sceneActors.map((a) => a.id)).not.toContain(d5PawnId)
+    expect(after.sceneActors.find((a) => a.id === attackerId)?.square).toBe('d6')
+  })
+})
+
+describe('game store — Phase 3 promotion', () => {
+  const toG7: [Square, Square][] = [
+    ['d2', 'd4'],
+    ['e7', 'e5'],
+    ['d4', 'e5'],
+    ['f7', 'f6'],
+    ['e5', 'f6'],
+    ['b8', 'c6'],
+    ['f6', 'g7'],
+    ['a7', 'a6'],
+  ]
+
+  it('swaps type on the SAME actor id and scripts the transform', () => {
+    playTaps(toG7)
+    const pawnId = useGameStore.getState().actors.find((a) => a.square === 'g7' && a.alive)!.id
+    const rookId = useGameStore.getState().actors.find((a) => a.square === 'h8' && a.alive)!.id
+
+    useGameStore.getState().handleTap('g7')
+    useGameStore.getState().handleTap('h8')
+    useGameStore.getState().completePromotion('q')
+
+    const s = useGameStore.getState()
+    const promoted = s.actors.find((a) => a.id === pawnId)
+    expect(promoted).toMatchObject({ type: 'q', square: 'h8', alive: true, color: 'w' })
+    // Same id → the 3D actor is not remounted; it swaps geometry mid-transform.
+    expect(s.sceneActors.filter((a) => a.square === 'h8' && a.alive).map((a) => a.id)).toEqual([
+      pawnId,
+    ])
+    const transform = commandsOfType('promotion-transform')
+    expect(transform).toHaveLength(1)
+    expect(transform[0]).toMatchObject({ actorId: pawnId, fromType: 'p', toType: 'q' })
+    // Promotion with capture: the rook dies in the battle first.
+    expect(commandsOfType('death')[0].actorId).toBe(rookId)
+
+    // Lock spans battle + transform; releases only when both actors finish.
+    expect(s.inputLocked).toBe(true)
+    useGameStore.getState().settleActor(rookId, s.animSeq)
+    expect(useGameStore.getState().inputLocked).toBe(true) // promoting pawn still transforming
+    useGameStore.getState().settleActor(pawnId, s.animSeq)
+    expect(useGameStore.getState().inputLocked).toBe(false)
+  })
+
+  it('a quiet promotion (no capture) keeps the id and only transforms', () => {
+    // g4 h5 gxh5 Nf6 h6 Rg8 hxg7 Rh8 g8=R
+    playTaps([
+      ['g2', 'g4'],
+      ['h7', 'h5'],
+      ['g4', 'h5'],
+      ['g8', 'f6'],
+      ['h5', 'h6'],
+      ['h8', 'g8'],
+      ['h6', 'g7'],
+      ['g8', 'h8'],
+    ])
+    const pawnId = useGameStore.getState().actors.find((a) => a.square === 'g7' && a.alive)!.id
+    useGameStore.getState().tryMove('g7', 'g8', 'r')
+    const s = useGameStore.getState()
+    expect(s.actors.find((a) => a.id === pawnId)).toMatchObject({ type: 'r', square: 'g8' })
+    expect(s.animCommands.map((c) => c.type)).toEqual(['move', 'promotion-transform'])
+    expect(s.animCommands.every((c) => c.actorId === pawnId)).toBe(true)
+  })
+})
+
+describe('game store — Phase 3 check alarm', () => {
+  it('alarms the checked king; the alarm never holds the lock and persists until resolved', () => {
+    playTaps([
+      ['e2', 'e4'],
+      ['f7', 'f5'],
+    ])
+    const blackKingId = useGameStore.getState().actors.find((a) => a.square === 'e8')!.id
+
+    useGameStore.getState().tryMove('d1', 'h5') // Qh5+
+    let s = useGameStore.getState()
+    expect(s.status).toBe('check')
+    const alarm = commandsOfType('alarm')
+    expect(alarm).toHaveLength(1)
+    expect(alarm[0].actorId).toBe(blackKingId)
+    // Only the queen's walk holds the lock (the alarm loops forever).
+    expect(s.inputLocked).toBe(true)
+    expect(settleBatchInTimelineOrder()).not.toContain(blackKingId)
+    s = useGameStore.getState()
+    expect(s.inputLocked).toBe(false)
+    // The looping alarm survives the settle — check is not yet resolved.
+    expect(s.animCommands.map((c) => c.type)).toEqual(['alarm'])
+
+    // Black resolves the check with g6 → the alarm stops (new batch has none).
+    playTaps([['g7', 'g6']])
+    s = useGameStore.getState()
+    expect(s.status).toBe('playing')
+    expect(s.animCommands.some((c) => c.type === 'alarm')).toBe(false)
+  })
+
+  it('undo into a checked position re-arms the alarm without locking input', () => {
+    playTaps([
+      ['e2', 'e4'],
+      ['f7', 'f5'],
+      ['d1', 'h5'],
+      ['g7', 'g6'],
+    ])
+    useGameStore.getState().undo() // back to: black in check
+    const s = useGameStore.getState()
+    expect(s.status).toBe('check')
+    expect(s.inputLocked).toBe(false)
+    expect(s.animCommands).toHaveLength(1)
+    expect(s.animCommands[0]).toMatchObject({ type: 'alarm', delayMs: 0 })
+    const king = s.actors.find((a) => a.id === s.animCommands[0].actorId)
+    expect(king).toMatchObject({ type: 'k', color: 'b', square: 'e8' })
+  })
+})
+
+describe('game store — Phase 3 checkmate', () => {
+  it("Fool's mate: the lock spans the mated king's fall, and the fall pose is retained", () => {
+    playTaps([
+      ['f2', 'f3'],
+      ['e7', 'e5'],
+      ['g2', 'g4'],
+    ])
+    const whiteKingId = useGameStore.getState().actors.find((a) => a.square === 'e1')!.id
+    useGameStore.getState().tryMove('d8', 'h4') // Qh4#
+    let s = useGameStore.getState()
+    expect(s.status).toBe('checkmate')
+    const fall = commandsOfType('checkmate-fall')
+    expect(fall).toHaveLength(1)
+    expect(fall[0].actorId).toBe(whiteKingId)
+    expect(s.inputLocked).toBe(true)
+
+    // Queen lands first; the lock holds until the king's fall has finished.
+    const queenId = s.animCommands.find((c) => c.type === 'move')!.actorId
+    useGameStore.getState().settleActor(queenId, s.animSeq)
+    expect(useGameStore.getState().inputLocked).toBe(true)
+    useGameStore.getState().settleActor(whiteKingId, s.animSeq)
+    s = useGameStore.getState()
+    expect(s.inputLocked).toBe(false)
+    // The king stays fallen (retained final pose) — no alarm on a mated king.
+    expect(s.animCommands.map((c) => c.type)).toEqual(['checkmate-fall'])
+    expect(sequenceDurationMs(s.animCommands)).toBeGreaterThan(0)
+  })
+})
+
+describe('game store — Phase 3 reset paths', () => {
+  it('newGame mid-battle clears the battle, the lock and the dying actors', () => {
+    playTaps([
+      ['e2', 'e4'],
+      ['d7', 'd5'],
+    ])
+    useGameStore.getState().tryMove('e4', 'd5')
+    expect(useGameStore.getState().inputLocked).toBe(true)
+    useGameStore.getState().newGame()
+    const s = useGameStore.getState()
+    expect(s.inputLocked).toBe(false)
+    expect(s.animCommands).toEqual([])
+    expect(s.cameraShakes).toEqual([])
+    expect(s.sceneActors).toHaveLength(32)
+    expect(s.sceneActors.every((a) => a.alive)).toBe(true)
+  })
+
+  it('undo mid-battle rebuilds a consistent scene with no pending battle', () => {
+    playTaps([
+      ['e2', 'e4'],
+      ['d7', 'd5'],
+    ])
+    useGameStore.getState().tryMove('e4', 'd5')
+    useGameStore.getState().undo()
+    const s = useGameStore.getState()
+    expect(s.inputLocked).toBe(false)
+    expect(s.animCommands).toEqual([])
+    expect(s.sceneActors).toHaveLength(32)
+    expect(s.sceneActors.find((a) => a.square === 'd5')).toMatchObject({ color: 'b', type: 'p' })
+  })
+})
+
+describe('game store — Phase 3 lock watchdog', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('unlocks a battle the render loop never settles, only after sequence end + grace', () => {
+    vi.useFakeTimers()
+    playTaps([
+      ['e2', 'e4'],
+      ['d7', 'd5'],
+    ])
+    useGameStore.getState().tryMove('e4', 'd5')
+    const s = useGameStore.getState()
+    const end = sequenceDurationMs(s.animCommands)
+    const victimId = commandsOfType('death')[0].actorId
+
+    vi.advanceTimersByTime(end + LOCK_WATCHDOG_GRACE_MS - 1)
+    expect(useGameStore.getState().inputLocked).toBe(true)
+    vi.advanceTimersByTime(2)
+    const after = useGameStore.getState()
+    expect(after.inputLocked).toBe(false)
+    expect(after.sceneActors.map((a) => a.id)).not.toContain(victimId)
+  })
+
+  it('a normally settled batch is not disturbed by its old watchdog', () => {
+    vi.useFakeTimers()
+    useGameStore.getState().tryMove('e2', 'e4')
+    settleBatchInTimelineOrder()
+    useGameStore.getState().tryMove('e7', 'e5') // new batch, locked
+    const seq = useGameStore.getState().animSeq
+    // Advance just past the FIRST batch's watchdog deadline but well before the second's.
+    vi.advanceTimersByTime(10)
+    expect(useGameStore.getState().inputLocked).toBe(true)
+    expect(useGameStore.getState().animSeq).toBe(seq)
   })
 })

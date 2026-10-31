@@ -1,4 +1,5 @@
 import type { Color, PieceSymbol } from 'chess.js'
+import { ARMY_PALETTE } from './palette'
 
 /**
  * Raycast no-op: pieces and highlights are purely visual so taps always pass
@@ -7,10 +8,7 @@ import type { Color, PieceSymbol } from 'chess.js'
 const NO_RAYCAST = () => null
 
 /** Per-army placeholder materials — clear light-vs-dark contrast on a dark board. */
-const ARMY = {
-  w: { color: '#ece0c8', metalness: 0.12, roughness: 0.55, emissive: '#000000' },
-  b: { color: '#363b45', metalness: 0.3, roughness: 0.45, emissive: '#0b0d12' },
-} as const
+const ARMY = ARMY_PALETTE
 
 type PieceProps = { type: PieceSymbol; color: Color }
 

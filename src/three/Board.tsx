@@ -4,6 +4,7 @@ import type { Square } from 'chess.js'
 import { useGameStore } from '../game/store'
 import { BOARD_LAYOUT, squareToXZ } from './coords'
 import { Army } from './pieces/Army'
+import { BattleEffects } from './effects/BattleEffects'
 
 const NO_RAYCAST = () => null
 
@@ -93,6 +94,9 @@ export function Board() {
 
       {/* Persistent piece actors — animate between squares, keyed by actor id. */}
       <Army />
+
+      {/* Additive battle effects (shards + dust) — never part of actor identity. */}
+      <BattleEffects />
     </group>
   )
 }

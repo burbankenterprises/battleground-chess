@@ -2,8 +2,28 @@ import { create } from 'zustand'
 import { Chess } from 'chess.js'
 import type { Color, Move, PieceSymbol, Square } from 'chess.js'
 import { createPieceTracker } from './pieceTracker'
-import { directMove } from '../anim/director'
-import type { ActorId, ActorSnapshot, AnimCommand } from './types'
+import { moveOutcomeOf } from './outcome'
+import {
+  directCameraShakes,
+  directMove,
+  directPositionAlarm,
+  isLoopingCommand,
+  sequenceDurationMs,
+} from '../anim/director'
+import type {
+  ActorId,
+  ActorSnapshot,
+  AnimCommand,
+  CameraShakeCue,
+} from './types'
+
+/**
+ * Safety net for the input lock: if the render loop never reports a batch
+ * settled (e.g. WebGL context lost, tab frozen mid-move), the store unlocks
+ * this long after the sequence should have ended. Normal play never reaches it
+ * — actors report settled on the first frame after their last command ends.
+ */
+export const LOCK_WATCHDOG_GRACE_MS = 1500
 
 /** A single occupied square, flattened from chess.js board(). */
 export type BoardSquare = { square: Square; type: PieceSymbol; color: Color }
@@ -26,11 +46,27 @@ export type GameState = {
   // ---- reactive, derived snapshots (components subscribe to these) ----
   /** Flat list of occupied squares, refreshed after every mutation. */
   boardSnapshot: BoardSquare[]
-  /** Persistent 3D actor identities, refreshed after every mutation. */
+  /** Every actor identity this game (dead ones included), refreshed after every mutation. */
   actors: ActorSnapshot[]
-  /** Animation commands for the most recent move (empty when settled). */
+  /**
+   * Actors that belong in the 3D scene right now: every living actor plus any
+   * dead actor still playing its death in the current sequence. A captured
+   * actor leaves this list when the battle sequence settles.
+   */
+  sceneActors: ActorSnapshot[]
+  /**
+   * The current animation batch (director v2 timeline). One-shot commands are
+   * dropped when the sequence settles; the looping check `alarm` and the final
+   * `checkmate-fall` pose are retained until the next batch.
+   */
   animCommands: AnimCommand[]
-  /** True while any actor is still animating the current move. */
+  /** Monotonic id of the current animation batch. */
+  animSeq: number
+  /** performance.now() when the current batch started — every command's delayMs is relative to it. */
+  animStartedAt: number
+  /** Camera micro-shake cues for the current batch (capture impacts). */
+  cameraShakes: CameraShakeCue[]
+  /** True while any one-shot command of the current sequence is still playing. */
   inputLocked: boolean
   /** Side to move. */
   turn: Color
@@ -72,8 +108,12 @@ export type GameState = {
   toggleAutoFlip: () => void
 
   // ---- animation lifecycle ----
-  /** One actor finished its walk; releases the lock once all have settled. */
-  settleActor: (id: ActorId) => void
+  /**
+   * One actor finished every one-shot command of the current batch. When the
+   * last one reports, the sequence settles: input unlocks and dying actors
+   * leave the scene. A `seq` from an older batch is ignored.
+   */
+  settleActor: (id: ActorId, seq?: number) => void
   /** Force every outstanding animation to settle immediately (unlock input). */
   settleAnimations: () => void
 }
@@ -113,26 +153,104 @@ function derived(game: Chess) {
   }
 }
 
+/**
+ * Living actors plus the dead actors that still have a death to play in
+ * `commands` — i.e. who belongs in the 3D scene right now.
+ */
+export function sceneActorsFor(
+  actors: readonly ActorSnapshot[],
+  commands: readonly AnimCommand[],
+): ActorSnapshot[] {
+  const dying = new Set<ActorId>()
+  for (const c of commands) if (c.type === 'death') dying.add(c.actorId)
+  return actors.filter((a) => a.alive || dying.has(a.id))
+}
+
+/** Commands that outlive their sequence: the check alarm loop and the mated king's final pose. */
+function retainedAfterSettle(command: AnimCommand): boolean {
+  return command.type === 'alarm' || command.type === 'checkmate-fall'
+}
+
 export const useGameStore = create<GameState>((set, get) => {
   const game = new Chess()
   const tracker = createPieceTracker()
   tracker.syncFromBoard(game.board())
 
-  // Actors still mid-walk for the current move. Non-reactive: the reactive
-  // mirror is `inputLocked`. Reassigned (not mutated) on each new move batch.
+  // Actors with one-shot commands still playing in the current batch.
+  // Non-reactive: the reactive mirror is `inputLocked`. Reassigned per batch.
   let pendingSettle = new Set<ActorId>()
+  // Pending lock watchdog for the current batch (see LOCK_WATCHDOG_GRACE_MS).
+  let watchdog: ReturnType<typeof setTimeout> | null = null
 
-  /** Clear tracker to a fresh identity set from the live board (undo / reset). */
-  function rebuildFromBoard() {
-    tracker.syncFromBoard(game.board())
-    pendingSettle = new Set()
+  const resolveActorId = (square: Square) => tracker.actorIdAt(square)
+
+  function clearWatchdog() {
+    if (watchdog !== null) clearTimeout(watchdog)
+    watchdog = null
   }
+
+  /** Publish a fresh animation batch (plus any extra state) in one store update. */
+  function startBatch(commands: AnimCommand[], extra: Partial<GameState>) {
+    clearWatchdog()
+    pendingSettle = new Set(
+      commands.filter((c) => !isLoopingCommand(c)).map((c) => c.actorId),
+    )
+    const actors = tracker.actors()
+    const seq = get().animSeq + 1
+    set({
+      ...derived(game),
+      actors,
+      sceneActors: sceneActorsFor(actors, commands),
+      animCommands: commands,
+      animSeq: seq,
+      animStartedAt: performance.now(),
+      cameraShakes: directCameraShakes(commands),
+      inputLocked: pendingSettle.size > 0,
+      ...extra,
+    })
+    if (pendingSettle.size > 0) {
+      watchdog = setTimeout(() => {
+        watchdog = null
+        if (get().animSeq === seq && get().inputLocked) finishBatch()
+      }, sequenceDurationMs(commands) + LOCK_WATCHDOG_GRACE_MS)
+    }
+  }
+
+  /** The sequence is over: unlock input, drop one-shot commands and dying actors. */
+  function finishBatch() {
+    clearWatchdog()
+    pendingSettle = new Set()
+    const { animCommands, actors } = get()
+    const retained = animCommands.filter(retainedAfterSettle)
+    set({
+      inputLocked: false,
+      animCommands: retained,
+      sceneActors: sceneActorsFor(actors, retained),
+      cameraShakes: [],
+    })
+  }
+
+  /**
+   * Rebuild identities from the live board (undo / new game) with no move
+   * animation. If the side to move is in check, its king alarms immediately.
+   */
+  function resetToBoard() {
+    tracker.syncFromBoard(game.board())
+    const alarm = directPositionAlarm(moveOutcomeOf(game), resolveActorId)
+    startBatch(alarm ? [alarm] : [], { selectedSquare: null, pendingPromotion: null })
+  }
+
+  const initialActors = tracker.actors()
 
   return {
     game,
     ...derived(game),
-    actors: tracker.actors(),
+    actors: initialActors,
+    sceneActors: sceneActorsFor(initialActors, []),
     animCommands: [],
+    animSeq: 0,
+    animStartedAt: 0,
+    cameraShakes: [],
     inputLocked: false,
     selectedSquare: null,
     pendingPromotion: null,
@@ -149,26 +267,29 @@ export const useGameStore = create<GameState>((set, get) => {
     },
 
     tryMove: (from, to, promo) => {
-      const g = get().game
+      let move: Move
       try {
-        const move = g.move({ from, to, promotion: promo })
-        // Advance piece identities, then script the walk for the pieces that moved.
-        tracker.applyMove(move)
-        const commands = directMove(move, (sq) => tracker.actorIdAt(sq))
-        pendingSettle = new Set(commands.map((c) => c.actorId))
-        set({
-          ...derived(g),
-          actors: tracker.actors(),
-          animCommands: commands,
-          inputLocked: pendingSettle.size > 0,
-          selectedSquare: null,
-          pendingPromotion: null,
-        })
-        return move
+        move = game.move({ from, to, promotion: promo })
       } catch {
         // chess.js throws on an illegal move — report it as rejected.
         return null
       }
+      // Advance piece identities, then script the full battle timeline for the
+      // move, including the post-move check / checkmate state from chess.js.
+      let commands: AnimCommand[]
+      try {
+        const events = tracker.applyMove(move)
+        commands = directMove(move, resolveActorId, events, moveOutcomeOf(game))
+      } catch (err) {
+        // Identity bookkeeping failed (should be impossible for a legal move).
+        // chess.js already applied the move, so resync the pieces from its
+        // board — the scene must never disagree with the rules authority.
+        console.error('battleground-chess: move scripting failed, resyncing pieces', err)
+        tracker.syncFromBoard(game.board())
+        commands = []
+      }
+      startBatch(commands, { selectedSquare: null, pendingPromotion: null })
+      return move
     },
 
     handleTap: (square) => {
@@ -230,46 +351,28 @@ export const useGameStore = create<GameState>((set, get) => {
     cancelPromotion: () => set({ pendingPromotion: null, selectedSquare: null }),
 
     undo: () => {
-      const g = get().game
-      const undone = g.undo()
+      const undone = game.undo()
       // Undo rebuilds identities from scratch (no replay animation), per plan.
-      rebuildFromBoard()
-      set({
-        ...derived(g),
-        actors: tracker.actors(),
-        animCommands: [],
-        inputLocked: false,
-        selectedSquare: null,
-        pendingPromotion: null,
-      })
+      resetToBoard()
       return undone
     },
 
     newGame: () => {
-      const g = get().game
-      g.reset()
-      rebuildFromBoard()
-      set({
-        ...derived(g),
-        actors: tracker.actors(),
-        animCommands: [],
-        inputLocked: false,
-        selectedSquare: null,
-        pendingPromotion: null,
-      })
+      game.reset()
+      resetToBoard()
     },
 
     toggleAutoFlip: () => set((s) => ({ autoFlip: !s.autoFlip })),
 
-    settleActor: (id) => {
+    settleActor: (id, seq) => {
+      if (seq !== undefined && seq !== get().animSeq) return
       if (!pendingSettle.has(id)) return
       pendingSettle.delete(id)
-      if (pendingSettle.size === 0) set({ inputLocked: false, animCommands: [] })
+      if (pendingSettle.size === 0) finishBatch()
     },
 
     settleAnimations: () => {
-      pendingSettle = new Set()
-      set({ inputLocked: false, animCommands: [] })
+      finishBatch()
     },
   }
 })

@@ -42,15 +42,22 @@ function pairMoves(history: string[]): { n: number; white: string; black: string
 export function HUD() {
   const turn = useGameStore((s) => s.turn)
   const status = useGameStore((s) => s.status)
+  const inputLocked = useGameStore((s) => s.inputLocked)
   const moveHistory = useGameStore((s) => s.moveHistory)
   const autoFlip = useGameStore((s) => s.autoFlip)
   const undo = useGameStore((s) => s.undo)
   const newGame = useGameStore((s) => s.newGame)
   const toggleAutoFlip = useGameStore((s) => s.toggleAutoFlip)
 
-  const b = banner(status, turn)
+  // The status banner (and the game-over pill) wait for the move's animation
+  // sequence to finish, so the HUD never announces an outcome before the
+  // pieces act it out: the checkmate banner appears after the mated king's
+  // fall, the check banner when the king's alarm starts.
+  const showOutcome = !inputLocked
+  const b = showOutcome ? banner(status, turn) : null
   const rows = pairMoves(moveHistory)
-  const gameOver = status === 'checkmate' || status === 'stalemate' || status === 'draw'
+  const gameOver =
+    showOutcome && (status === 'checkmate' || status === 'stalemate' || status === 'draw')
 
   return (
     <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-3">

@@ -21,6 +21,33 @@ export function fileRankToSquare(file: number, rank: number): Square {
   return `${FILES[file]}${rank + 1}` as Square
 }
 
+/**
+ * Unit world-space [dx, dz] pointing from one square's center toward another's.
+ * Falls back to [0, -1] (toward black's side) for a zero-length pair.
+ */
+export function squareDir(from: Square, to: Square): [number, number] {
+  const [fx, fz] = squareToXZ(from)
+  const [tx, tz] = squareToXZ(to)
+  const dx = tx - fx
+  const dz = tz - fz
+  const len = Math.hypot(dx, dz)
+  if (len < 1e-9) return [0, -1]
+  return [dx / len, dz / len]
+}
+
+/**
+ * World [x, z] on the straight line from `from` toward `to`, stopping
+ * `shortTiles` before `to` (never behind `from`).
+ */
+export function pointShortOf(from: Square, to: Square, shortTiles: number): [number, number] {
+  const [fx, fz] = squareToXZ(from)
+  const [tx, tz] = squareToXZ(to)
+  const len = Math.hypot(tx - fx, tz - fz)
+  if (len < 1e-9) return [fx, fz]
+  const along = Math.max(0, len - shortTiles * TILE) / len
+  return [fx + (tx - fx) * along, fz + (tz - fz) * along]
+}
+
 export type TileLayout = {
   square: Square
   x: number
