@@ -12,6 +12,11 @@ const WHITE_AZIMUTH = 0
 const BLACK_AZIMUTH = Math.PI
 /** Flip duration (spec: ~800ms). */
 const FLIP_MS = 800
+/**
+ * After a move's sequence settles (input unlocks), hold this long before
+ * flipping — the death animation + shards read fully before the camera turns.
+ */
+export const FLIP_HOLD_AFTER_SETTLE_MS = 450
 
 type Controls = ComponentRef<typeof OrbitControls>
 
@@ -48,6 +53,8 @@ export function CameraRig() {
   const autoFlip = useGameStore((s) => s.autoFlip)
   const cameraShakes = useGameStore((s) => s.cameraShakes)
   const animStartedAt = useGameStore((s) => s.animStartedAt)
+  const inputLocked = useGameStore((s) => s.inputLocked)
+  const animSeq = useGameStore((s) => s.animSeq)
 
   const anim = useRef({ from: 0, to: 0, start: 0, active: false })
 
@@ -73,16 +80,30 @@ export function CameraRig() {
     }
   }, [])
 
+  // The flip waits for the battle sequence to finish (input unlocks) plus a
+  // short hold, so captures play out fully in front of the player who made
+  // the move — the camera never rotates away mid-fight (Jon, Nov 2026).
   useEffect(() => {
+    if (!autoFlip || inputLocked) return
     const controls = controlsRef.current
-    if (!controls || !autoFlip) return
+    if (!controls) return
     const desired = turn === 'w' ? WHITE_AZIMUTH : BLACK_AZIMUTH
-    const from = controls.getAzimuthalAngle()
-    const to = nearestAngle(from, desired)
-    // Already essentially there — no animation needed.
-    if (Math.abs(to - from) < 1e-3) return
-    anim.current = { from, to, start: performance.now(), active: true }
-  }, [turn, autoFlip])
+    const timer = setTimeout(() => {
+      const c = controlsRef.current
+      if (!c) return
+      const from = c.getAzimuthalAngle()
+      const to = nearestAngle(from, desired)
+      if (Math.abs(to - from) < 1e-3) return
+      anim.current = { from, to, start: performance.now(), active: true }
+    }, FLIP_HOLD_AFTER_SETTLE_MS)
+    return () => clearTimeout(timer)
+  }, [turn, autoFlip, inputLocked, animSeq])
+
+  // Auto-flip switched off mid-sequence: cancel any pending flip.
+  useEffect(() => {
+    if (autoFlip) return
+    anim.current.active = false
+  }, [autoFlip])
 
   useFrame((state) => {
     // 1) Auto-flip (unchanged from Phase 1).
