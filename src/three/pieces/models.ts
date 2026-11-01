@@ -4,13 +4,15 @@ import {
   ConeGeometry,
   CylinderGeometry,
   Group,
+  LatheGeometry,
   Mesh,
   MeshStandardMaterial,
   Object3D,
   SphereGeometry,
+  Vector2,
   Vector3,
 } from 'three'
-import type { BufferGeometry } from 'three'
+import type { BufferAttribute, BufferGeometry } from 'three'
 import { ARMY_PALETTE, ARMY_THEME } from './palette'
 import type { ArmyRole } from './palette'
 
@@ -130,8 +132,8 @@ const TORSO_BOTTOM_R = 0.064
 /** Belt / sash band covering the skirt–torso seam. */
 const BELT_R = 0.071
 const BELT_H = 0.026
-const HEAD_R = 0.056
-const HEAD_Y = 0.352
+const HEAD_R = 0.062
+const HEAD_Y = 0.356
 const SHOULDER_X = 0.09
 const SHOULDER_Y = 0.29
 const ARM_W = 0.037
@@ -427,6 +429,12 @@ type FigureSpec = {
   torso: ArmyRole
   belt: ArmyRole | null
   headgear: Headgear
+  /**
+   * Turned robe silhouette (Tier 2): one smooth lathe hem→waist→shoulders.
+   * Default true; false falls back to the Phase 4 stacked cylinders (used by
+   * figures whose legs must stay visible, e.g. charioteers, riders).
+   */
+  robe?: boolean
 }
 
 const RIGHT = 1
@@ -463,6 +471,63 @@ function cylinderGeo(rTop: number, rBottom: number, h: number, segments: number)
     `cyl:${keyOf(rTop)}:${keyOf(rBottom)}:${keyOf(h)}:${segments}`,
     () => new CylinderGeometry(rTop, rBottom, h, segments),
   )
+}
+
+/**
+ * A turned garment profile (Tier 2 silhouette work): one LatheGeometry whose
+ * radius curve flows hem → ankle pinch → waist → chest → shoulders, with a
+ * soft flare at the hem. Reads as a draped robe at board scale instead of
+ * stacked cylinders — silhouette carries the detail, not texture.
+ *
+ * Pass 3 (A + B): silhouette opened up — hem flares wider than the old
+ * cylinders ever were, shoulders broaden, waist pinches harder — and 5 long
+ * drape folds are displaced into the mesh itself (strongest at the hem, gone
+ * by the chest) so cloth reads AT BOARD DISTANCE, where thread-scale texture
+ * cannot. Stays inside the plinth radius (models.test enforces).
+ */
+const ROBE_FOLDS = 5
+/** Fold depth as a fraction of local radius — tuned to read at 40 px, invisible as noise zoomed out. */
+const ROBE_FOLD_DEPTH = 0.14
+/** Garment height fraction (0 = hem, 1 = neck) above which folds fade to nothing. */
+const ROBE_FOLD_FADE_TOP = 0.62
+/** Where the fold ridges sit around the figure, so both armies drape alike. */
+const ROBE_FOLD_PHASE = (2 * Math.PI) / ROBE_FOLDS
+
+function robeGeo(segments: number): BufferGeometry {
+  return cachedGeometry(`robe3:${segments}:${ROBE_FOLDS}:${ROBE_FOLD_DEPTH}`, () => {
+    // Silhouette curve (y from 0 = feet to neck): hem edge, flare, calf, hip,
+    // waist, chest, shoulder, neck cap.
+    const pts: Vector2[] = [
+      [0.108, 0.0], // hem edge (sits just above the plinth)
+      [0.118, 0.014], // hem flare — the widest point of the figure
+      [0.096, 0.1], // calf drape
+      [0.079, 0.185], // hip → waist pinch
+      [0.099, 0.27], // chest rise
+      [0.112, 0.315], // shoulder swell
+      [0.042, 0.335], // neck close-in (caps the top)
+    ].map(([r, y]) => new Vector2(r, y))
+    const lathe = new LatheGeometry(pts, segments)
+    // B: displace the fold ridges radially. Angle-locked to the lathe seam so
+    // the folds are continuous around the full 360° (no seam mismatch).
+    const pos = lathe.attributes.position as BufferAttribute
+    const maxY = 0.335
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i)
+      const y = pos.getY(i)
+      const z = pos.getZ(i)
+      const r = Math.hypot(x, z)
+      if (r < 1e-5) continue
+      // Garment height fraction 0..1 (hem → neck); folds fade out by FADE_TOP.
+      const t = Math.min(y / maxY, 1)
+      const fade = t >= ROBE_FOLD_FADE_TOP ? 0 : Math.cos((t / ROBE_FOLD_FADE_TOP) * Math.PI * 0.5)
+      const angle = Math.atan2(z, x)
+      const ridge = Math.cos(angle * ROBE_FOLDS + ROBE_FOLD_PHASE)
+      const depth = ROBE_FOLD_DEPTH * fade * (r * 0.5)
+      pos.setXYZ(i, x + (x / r) * depth * ridge, y, z + (z / r) * depth * ridge)
+    }
+    lathe.computeVertexNormals()
+    return lathe
+  })
 }
 
 /** Cone with its apex on local +y. */
@@ -629,22 +694,36 @@ function figureBody(fig: Object3D, paint: Paint, spec: FigureSpec): void {
       part(fig, boxGeo(LEG_W, LEG_H, LEG_D), paint(spec.legs), [side * LEG_X, LEG_H / 2, 0])
     }
   }
-  if (spec.skirt) {
+  if (spec.robe !== false) {
+    // Turned robe: hem → waist → shoulders in one smooth lathe (Tier 2).
+    part(fig, robeGeo(SEG_SMALL), paint(spec.torso), [0, 0, 0])
+    if (spec.belt) {
+      // Belt reads as a raised band crossing the robe's waist pinch.
+      part(
+        fig,
+        cylinderGeo(BELT_R * 1.12, BELT_R * 1.12, BELT_H, SEG_LARGE),
+        paint(spec.belt),
+        [0, TORSO_BOTTOM_Y, 0],
+      )
+    }
+  } else {
+    if (spec.skirt) {
+      part(
+        fig,
+        cylinderGeo(SKIRT_TOP_R, SKIRT_BOTTOM_R, SKIRT_H, SEG_SMALL),
+        paint(spec.skirt),
+        [0, SKIRT_BOTTOM_Y + SKIRT_H / 2, 0],
+      )
+    }
     part(
       fig,
-      cylinderGeo(SKIRT_TOP_R, SKIRT_BOTTOM_R, SKIRT_H, SEG_SMALL),
-      paint(spec.skirt),
-      [0, SKIRT_BOTTOM_Y + SKIRT_H / 2, 0],
+      cylinderGeo(TORSO_TOP_R, TORSO_BOTTOM_R, TORSO_H, SEG_SMALL),
+      paint(spec.torso),
+      [0, TORSO_BOTTOM_Y + TORSO_H / 2, 0],
     )
-  }
-  part(
-    fig,
-    cylinderGeo(TORSO_TOP_R, TORSO_BOTTOM_R, TORSO_H, SEG_SMALL),
-    paint(spec.torso),
-    [0, TORSO_BOTTOM_Y + TORSO_H / 2, 0],
-  )
-  if (spec.belt) {
-    part(fig, cylinderGeo(BELT_R, BELT_R, BELT_H, SEG_SMALL), paint(spec.belt), [0, TORSO_BOTTOM_Y, 0])
+    if (spec.belt) {
+      part(fig, cylinderGeo(BELT_R, BELT_R, BELT_H, SEG_SMALL), paint(spec.belt), [0, TORSO_BOTTOM_Y, 0])
+    }
   }
   part(fig, sphereGeo(HEAD_R), paint('skin'), [0, HEAD_Y, 0])
   headgear(fig, paint, spec.headgear)

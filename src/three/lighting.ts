@@ -50,8 +50,10 @@ export const KEY_LIGHT = {
 export const RIM_LIGHT = {
   name: 'rim',
   kind: 'directional',
-  color: '#8fa8e8',
-  intensity: 0.55,
+  // Pass 3 (B+): pushed from 0.55 — a genuinely bright cool rim so figures
+  // separate from the sand at board distance. No shadow (one-caster contract).
+  color: '#a9c4ff',
+  intensity: 1.15,
   position: [-6, 7, -6],
   castShadow: false,
 } as const satisfies SceneLightSpec
