@@ -23,3 +23,25 @@ canvas {
   display: block;
   touch-action: none;
 }
+
+/* Move-list drawer: a short slide-up as it opens (Phase 5). */
+@keyframes drawer-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.drawer-in {
+  animation: drawer-in 140ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-in {
+    animation: none;
+  }
+}

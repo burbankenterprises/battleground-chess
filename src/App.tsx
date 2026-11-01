@@ -4,12 +4,15 @@ import { HUD } from './ui/HUD'
 import { Menu } from './ui/Menu'
 import { PromotionPicker } from './ui/PromotionPicker'
 import { useGameStore } from './game/store'
+import { useGameSounds } from './audio/useGameSounds'
 
 type Screen = 'menu' | 'game'
 
 function App() {
   const [screen, setScreen] = useState<Screen>('menu')
   const newGame = useGameStore((s) => s.newGame)
+  // Sound wiring lives at the root: the menu's first tap already unlocks audio.
+  useGameSounds()
 
   const startGame = () => {
     newGame()

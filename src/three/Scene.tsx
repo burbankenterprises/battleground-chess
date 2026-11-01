@@ -1,27 +1,39 @@
 import { Canvas } from '@react-three/fiber'
+import { PCFShadowMap } from 'three'
 import { Board } from './Board'
 import { CameraRig } from './CameraRig'
+import { Lighting } from './Lighting'
+import { LensShift } from './LensShift'
+import { Arena } from './environment/Arena'
+import { FOG_FAR, FOG_NEAR, SCENE_BACKGROUND } from './environment/arenaLayout'
+import { DEFAULT_CAMERA_FOV, DEFAULT_CAMERA_POSITION } from './framing'
 
 /**
- * 3D scene: Canvas, lights and a dark environment (no network HDR — lighting is
- * done with hemisphere + directional lights so the app stays fully offline).
- * Ancient-warfare warmth: a sun-warm key light and a warm-neutral sky over the
- * sand arena, with the cool fill kept as a rim so silhouettes still separate.
+ * 3D scene (Phase 5): a torchlit evening battlefield. The board sits sunk
+ * into a desert arena (sand, distant hills, rocks, four corner torches, dust
+ * motes — environment/arena.ts) under a warm low key light — the single
+ * shadow caster — a cool rim light and a dusky hemisphere fill (lighting.ts).
+ * Everything is procedural: no HDRs, textures or other assets. The dark
+ * background stays; distance fog melts the far sand and hills into it.
+ *
+ * Shadows: PCF (three r187 removed PCFSoftShadowMap; PCF with a radius gives
+ * the soft edge), rendered on demand by <Lighting>.
  */
 export function Scene() {
   return (
     <Canvas
-      camera={{ position: [0, 8, 8], fov: 45, near: 0.1, far: 100 }}
+      camera={{ position: [...DEFAULT_CAMERA_POSITION], fov: DEFAULT_CAMERA_FOV, near: 0.1, far: 150 }}
       dpr={[1, 2]}
-      gl={{ antialias: true }}
+      gl={{ antialias: true, powerPreference: 'high-performance' }}
+      shadows={{ type: PCFShadowMap }}
     >
-      <color attach="background" args={['#0b0d12']} />
-      <hemisphereLight intensity={0.55} color="#bdb6a8" groundColor="#17140f" />
-      <ambientLight intensity={0.25} />
-      <directionalLight position={[6, 12, 6]} intensity={1.15} color="#fff1de" />
-      <directionalLight position={[-6, 8, -4]} intensity={0.45} color="#9fb4e0" />
+      <color attach="background" args={[SCENE_BACKGROUND]} />
+      <fog attach="fog" args={[SCENE_BACKGROUND, FOG_NEAR, FOG_FAR]} />
+      <Lighting />
+      <Arena />
       <Board />
       <CameraRig />
+      <LensShift />
     </Canvas>
   )
 }

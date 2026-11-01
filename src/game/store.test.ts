@@ -726,3 +726,78 @@ describe('game store — Phase 3 lock watchdog', () => {
     expect(useGameStore.getState().animSeq).toBe(seq)
   })
 })
+
+describe('game store — Phase 6 draw-rule QA (reach draws through real taps)', () => {
+  it('threefold repetition: shuffling Ng1-f3 / Ng8-f6 three times ends in a Draw status', () => {
+    useGameStore.getState().newGame()
+    for (let i = 0; i < 2; i++) {
+      playTaps([
+        ['g1', 'f3'],
+        ['g8', 'f6'],
+        ['f3', 'g1'],
+        ['f6', 'g8'],
+      ])
+    }
+    // 8 half-moves played; position now repeated twice. Third repetition:
+    playTaps([['g1', 'f3'], ['g8', 'f6']])
+    expect(useGameStore.getState().status).toBe('draw')
+  })
+
+  it('insufficient material (K vs K) ends in a Draw status', () => {
+    // 81-ply all-trade line found by seeded search: every piece except the two
+    // kings comes off; chess.js then reports insufficient material.
+    const line = 'e2-e4 f7-f5 e4-f5 d7-d5 g1-f3 c8-f5 f1-c4 d8-c8 f3-e5 d5-c4 e5-c4 f5-c2 d1-c2 b8-c6 c2-h7 h8-h7 d2-d4 h7-h2 h1-h2 c6-d4 c4-a3 d4-c2 a3-c2 e8-d8 c2-b4 c8-b8 b4-c6 b7-c6 b1-c3 b8-b2 c1-b2 e7-e5 a2-a3 f8-a3 a1-a3 g7-g5 a3-a7 a8-a7 g2-g4 d8-d7 c3-a4 d7-d8 b2-e5 a7-a4 e5-c7 d8-c7 h2-h3 a4-g4 e1-d1 c7-d6 d1-e1 g8-h6 h3-h6 d6-d5 h6-c6 g4-e4 e1-f1 e4-a4 c6-d6 d5-c4 d6-a6 a4-a6 f1-g1 a6-b6 g1-h2 b6-b1 f2-f3 b1-g1 f3-f4 g5-f4 h2-g1 f4-f3 g1-h2 c4-d3 h2-g1 f3-f2 g1-f1 d3-e3 f1-g2 e3-d3 g2-f2'
+      .split(' ')
+      .map((m) => {
+        const [from, to] = m.split('-')
+        return [from, to] as [Square, Square]
+      })
+    useGameStore.getState().newGame()
+    for (const [from, to] of line) {
+      const moved = useGameStore.getState().tryMove(from, to)
+      expect(moved, `move ${from}-${to}`).not.toBeNull()
+      useGameStore.getState().settleAnimations()
+    }
+    const s = useGameStore.getState()
+    expect(s.boardSnapshot).toHaveLength(2)
+    expect(s.status).toBe('draw')
+  })
+
+  it('stalemate (black king cornered) shows the stalemate status', () => {
+    // Known short stalemate: 1. e3 a5 2. Qh5 Ra6 3. Qxa5 h5 4. Qxc7 Rah6
+    // 5. h4 f6 6. Qxd7+ Kf7 7. Qxb7 Qd3 8. Qxb8 Qh7 9. Qxc8 Kg6 10. Qe6 — stalemate.
+    const line: [Square, Square][] = [
+      ['e2', 'e3'], ['a7', 'a5'],
+      ['d1', 'h5'], ['a8', 'a6'],
+      ['h5', 'a5'], ['h7', 'h5'],
+      ['a5', 'c7'], ['a6', 'h6'],
+      ['h2', 'h4'], ['f7', 'f6'],
+      ['c7', 'd7'], ['e8', 'f7'],
+      ['d7', 'b7'], ['d8', 'd3'],
+      ['b7', 'b8'], ['d3', 'h7'],
+      ['b8', 'c8'], ['f7', 'g6'],
+      ['c8', 'e6'],
+    ]
+    useGameStore.getState().newGame()
+    for (const [from, to] of line) {
+      const moved = useGameStore.getState().tryMove(from, to)
+      expect(moved).not.toBeNull()
+      useGameStore.getState().settleAnimations()
+    }
+    expect(useGameStore.getState().status).toBe('stalemate')
+  })
+
+  it('50-move rule: knight shuffle with no pawn move or capture for 50 moves draws', () => {
+    // Ng1-f3 etc. both sides shuffle knights 50 full moves without capture/pawn move.
+    useGameStore.getState().newGame()
+    for (let i = 0; i < 50; i++) {
+      playTaps([
+        ['g1', 'f3'],
+        ['g8', 'f6'],
+        ['f3', 'g1'],
+        ['f6', 'g8'],
+      ])
+    }
+    expect(useGameStore.getState().status).toBe('draw')
+  })
+})
