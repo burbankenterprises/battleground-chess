@@ -1,5 +1,7 @@
-import { Canvas } from '@react-three/fiber'
+import { useEffect } from 'react'
+import { Canvas, useThree } from '@react-three/fiber'
 import { PCFShadowMap } from 'three'
+import { environmentFor } from './envMap'
 import { Board } from './Board'
 import { CameraRig } from './CameraRig'
 import { Lighting } from './Lighting'
@@ -7,6 +9,20 @@ import { LensShift } from './LensShift'
 import { Arena } from './environment/Arena'
 import { FOG_FAR, FOG_NEAR, SCENE_BACKGROUND } from './environment/arenaLayout'
 import { DEFAULT_CAMERA_FOV, DEFAULT_CAMERA_POSITION } from './framing'
+
+/** Bakes + assigns the procedural environment map (Tier 2 reflections). */
+function EnvironmentLighting() {
+  const gl = useThree((s) => s.gl)
+  const scene = useThree((s) => s.scene)
+  useEffect(() => {
+    scene.environment = environmentFor(gl)
+    scene.environmentIntensity = 0.9
+    return () => {
+      scene.environment = null
+    }
+  }, [gl, scene])
+  return null
+}
 
 /**
  * 3D scene (Phase 5): a torchlit evening battlefield. The board sits sunk
@@ -30,6 +46,7 @@ export function Scene() {
       <color attach="background" args={[SCENE_BACKGROUND]} />
       <fog attach="fog" args={[SCENE_BACKGROUND, FOG_NEAR, FOG_FAR]} />
       <Lighting />
+      <EnvironmentLighting />
       <Arena />
       <Board />
       <CameraRig />

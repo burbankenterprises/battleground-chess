@@ -102,7 +102,9 @@ describe('merged render models (one draw call per piece)', () => {
       expect(merged.emissive.getHex()).toBe(authored.emissive.getHex())
       expect(merged.emissiveIntensity).toBe(authored.emissiveIntensity)
       expect(merged.vertexColors).toBe(true)
-      expect(merged.flatShading).toBe(true)
+      // Tier 2: organic roles shade smooth in the authored model; the merged
+      // material smooths everything (normals were merged per-vertex anyway).
+      expect(merged.flatShading).toBe(false)
     }
   })
 

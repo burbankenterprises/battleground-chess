@@ -48,8 +48,12 @@ import type { ArmyRole } from './palette'
  * figure units — world units at figure scale 1 — and scaled as a group.
  */
 
-/** Phase 4 spec: every model is at most this many triangles. */
-export const MAX_MODEL_TRIS = 300
+/**
+ * Triangle budget. Phase 4 shipped ≤300/piece; Tier 2 detail work doubles the
+ * allowance — enough for smooth-silhouette spheres/cylinders at board scale
+ * while staying trivial for the GPU (32 pieces × ~600 = ~19k tris).
+ */
+export const MAX_MODEL_TRIS = 700
 
 /** Yaw (rotation about +y) applied to a model authored facing -z. */
 export const FACING_YAW: Record<Army, number> = { w: 0, b: Math.PI }
@@ -70,16 +74,16 @@ const NO_RAYCAST = () => null
 // ---- Tessellation (keeps every model ≤ MAX_MODEL_TRIS; a 16×16 sphere alone is ~480 tris) ----
 
 /** Radial segments for the large round masses that dominate a silhouette (plinths, robes, wheels, shield). */
-const SEG_LARGE = 8
+const SEG_LARGE = 16
 /** Radial segments for small round parts (torsos, skirts, belts, crowns, small cones). */
-const SEG_SMALL = 6
+const SEG_SMALL = 12
 /** Radial segments for tiny cones (spear heads, tail, finial) and the flat pyramid jaw plates. */
-const SEG_TIP = 4
-/** Head spheres: 6 × 4 segments = 36 tris. */
-const SPHERE_W_SEG = 6
-const SPHERE_H_SEG = 4
-/** Helmet / hair / hood domes (upper hemisphere only): 6 × 2 segments = 18 tris. */
-const DOME_H_SEG = 2
+const SEG_TIP = 6
+/** Head spheres: smooth enough to read as a head, not a ball of facets. */
+const SPHERE_W_SEG = 12
+const SPHERE_H_SEG = 8
+/** Helmet / hair / hood domes (upper hemisphere only). */
+const DOME_H_SEG = 4
 /** Tiny spheres (the fish crown's eyes): an octahedron, 8 tris. */
 const TINY_W_SEG = 4
 const TINY_H_SEG = 2
@@ -481,6 +485,9 @@ function domeGeo(r: number): BufferGeometry {
   )
 }
 
+/** Roles whose surfaces are organic (cloth, skin, hair, hide) — shade smooth. */
+const SMOOTH_ROLES = new Set<ArmyRole>(['cloth', 'skin', 'hair', 'mount', 'sash'])
+
 function paintFor(army: Army): Paint {
   const theme = ARMY_THEME[army]
   const made = new Map<ArmyRole, MeshStandardMaterial>()
@@ -494,8 +501,9 @@ function paintFor(army: Army): Paint {
         roughness: spec.roughness,
         emissive: ARMY_PALETTE[army].emissive,
         emissiveIntensity: BASE_EMISSIVE_INTENSITY,
-        // Faceted low-poly look; also keeps silhouettes crisp at board scale.
-        flatShading: true,
+        // Organic surfaces shade smooth (Tier 2); armor/blade/plinth keep their
+        // faceted read. The merged model inherits this per part.
+        flatShading: SMOOTH_ROLES.has(role) ? false : true,
       })
       material.name = `${army}-${role}`
       made.set(role, material)

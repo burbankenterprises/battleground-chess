@@ -1,8 +1,9 @@
 import type { Color as Army, PieceSymbol } from 'chess.js'
-import { BufferAttribute, Color, Group, Mesh, MeshStandardMaterial } from 'three'
+import { BufferAttribute, Color, Group, Mesh, MeshStandardMaterial, Vector2 } from 'three'
 import type { BufferGeometry, Material, WebGLProgramParametersWithUniforms } from 'three'
 import { FACING_YAW, FORWARD_MARKER, buildWarfarePiece } from './models'
 import { NO_RAYCAST, mergeOrThrow } from '../meshUtils'
+import { cellU, cellV, familyOfRole, textureAtlas, TEX_ATLAS_CELLS } from './textures'
 
 /**
  * Render models (Phase 5 perf pass): each procedural piece merged into ONE
@@ -32,6 +33,46 @@ export const MERGED_BODY = 'merged-body'
 
 const PBR_ATTRIBUTE = 'pbr'
 
+/**
+ * World-space texel density: UV repeat per world unit. Primitives carry 0..1
+ * UVs over their whole surface, which would stretch one atlas cell across a
+ * whole robe; scaling UVs by part size gives a consistent material scale.
+ */
+const UV_REPEAT = 3
+
+/** Stamp a part's UVs into its role's atlas cell (and scale for density). */
+function stampUvs(part: BufferGeometry, material: MeshStandardMaterial): void {
+  let uv = part.getAttribute('uv') as BufferAttribute | undefined
+  if (!uv) {
+    // Geometry without UVs (should not happen with three primitives): flat map.
+    const count = part.getAttribute('position').count
+    part.setAttribute('uv', new BufferAttribute(new Float32Array(count * 2), 2))
+    uv = part.getAttribute('uv') as BufferAttribute
+  }
+  const role = material.name.split('-')[1] ?? 'cloth'
+  const family = familyOfRole(role)
+  const cell = FAMILIES_INDEX(family)
+  const cu = cellU(cell)
+  const cv = cellV(cell)
+  const span = 1 / TEX_ATLAS_CELLS
+  const data = uv.array as Float32Array
+  for (let i = 0; i < uv.count; i++) {
+    data[i * 2] = cu + fract(data[i * 2] * UV_REPEAT) * span
+    data[i * 2 + 1] = cv + fract(data[i * 2 + 1] * UV_REPEAT) * span
+  }
+  uv.needsUpdate = true
+}
+
+function fract(v: number): number {
+  return v - Math.floor(v)
+}
+
+function FAMILIES_INDEX(family: ReturnType<typeof familyOfRole>): number {
+  return FAMILIES_LIST.indexOf(family)
+}
+
+const FAMILIES_LIST = ['linen', 'leather', 'bronze', 'steel', 'stone', 'wood', 'skin', 'hair', 'clothFlat'] as const
+
 /** One merged geometry per (army, type), built on first use. Never disposed. */
 const mergedGeometryCache = new Map<string, BufferGeometry>()
 
@@ -59,8 +100,11 @@ function bakeModel(type: PieceSymbol, color: Army): { geometry: BufferGeometry; 
     const material = obj.material as MeshStandardMaterial
     look ??= { emissive: material.emissive.clone(), emissiveIntensity: material.emissiveIntensity }
     const part = obj.geometry.clone()
-    part.deleteAttribute('uv') // no texture maps on the pieces
+    // Tier 2: keep UVs (normal/roughness maps need them). Box/cylinder/sphere
+    // primitives all carry sensible 0..1 UVs; stamp them into the role's
+    // atlas cell so one material can texture every role of the piece.
     part.applyMatrix4(obj.matrixWorld)
+    stampUvs(part, material)
     // A mirroring transform would flip the triangle winding (back faces out).
     if (obj.matrixWorld.determinant() < 0 && part.index) {
       const idx = part.index
@@ -176,16 +220,21 @@ function onBeforeCompilePbr(shader: WebGLProgramParametersWithUniforms): void {
 
 /** A fresh material for one render model (per build — applyTint mutates it). */
 function pieceMaterial(look: BaseLook, name: string): MeshStandardMaterial {
+  const atlas = textureAtlas()
   const material = new MeshStandardMaterial({
     color: 0xffffff, // the per-vertex role colors carry the paint
     vertexColors: true,
-    // Metalness / roughness come per vertex from the `pbr` attribute (shader patch).
+    // Metalness / roughness come per vertex from the `pbr` attribute (shader patch);
+    // the roughness MAP adds intra-surface variation on top.
     metalness: 0,
     roughness: 1,
+    roughnessMap: atlas.roughness,
+    normalMap: atlas.normal,
+    normalScale: new Vector2(0.8, 0.8),
     emissive: look.emissive,
     emissiveIntensity: look.emissiveIntensity,
-    // Faceted low-poly look (same as the authored parts).
-    flatShading: true,
+    // Organic parts were authored smooth; the merge averages normals anyway.
+    flatShading: false,
   })
   material.name = name
   material.onBeforeCompile = onBeforeCompilePbr
