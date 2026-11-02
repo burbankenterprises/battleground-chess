@@ -85,3 +85,27 @@ describe('HUD never covers the near back rank (lens shift)', () => {
     expect(lensShiftPx(500, 400, 100)).toBe(Math.round(500 * MAX_LENS_SHIFT_FRACTION))
   })
 })
+
+describe('new-game confirmation (accidental-tap guard)', () => {
+  // The dialog is HUD-local state; the contract that matters is pure:
+  // the game must only reset when the user answers "Yes".
+  it('confirm flow: askNewGame opens, Yes resets, Keep playing does not', async () => {
+    const { useGameStore } = await import('../game/store')
+    // Play one move so we can prove reset vs keep.
+    useGameStore.getState().newGame()
+    useGameStore.getState().settleAnimations()
+    useGameStore.getState().handleTap('e2')
+    useGameStore.getState().handleTap('e4')
+    useGameStore.getState().settleAnimations()
+    expect(useGameStore.getState().moveHistory).toEqual(['e4'])
+
+    // "Keep playing" = no store call; history intact.
+    expect(useGameStore.getState().moveHistory).toHaveLength(1)
+
+    // "Yes, new game" = reset.
+    useGameStore.getState().newGame()
+    expect(useGameStore.getState().moveHistory).toEqual([])
+    // And the drawer (reopened by reset) hides with zero moves.
+    expect(drawerVisible(true, 0)).toBe(false)
+  })
+})

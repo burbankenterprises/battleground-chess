@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useReducer, useRef } from 'react'
+import { useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { Color } from 'chess.js'
 import { useGameStore } from '../game/store'
 import type { GameStatus } from '../game/store'
@@ -144,7 +144,16 @@ export function HUD() {
   /** The latest half-move is black's when the count is even. */
   const lastIsBlack = halfMoves > 0 && halfMoves % 2 === 0
 
+  /** Confirm-new-game dialog open? (Jon: the button is too easy to hit by accident.) */
+  const [confirmingNew, setConfirmingNew] = useState(false)
+  const halfMovesAtOpen = useRef(0)
+
+  const askNewGame = () => {
+    halfMovesAtOpen.current = halfMoves
+    setConfirmingNew(true)
+  }
   const onNewGame = () => {
+    setConfirmingNew(false)
     dispatchDrawer('close')
     newGame()
   }
@@ -185,6 +194,45 @@ export function HUD() {
           </div>
         )}
       </div>
+
+      {/* New Game confirmation — a whole game must never reset on one tap (Jon, Nov 2026). */}
+      {confirmingNew && (
+        <div
+          className="pointer-events-auto fixed inset-0 z-20 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="new-game-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-[#161a22] p-5 shadow-2xl">
+            <h2 id="new-game-title" className="mb-1 text-center text-lg font-semibold text-white">
+              Start a new game?
+            </h2>
+            <p className="mb-5 text-center text-sm text-gray-400">
+              {halfMovesAtOpen.current === 0
+                ? 'The board is still fresh.'
+                : `The current game (${Math.ceil(halfMovesAtOpen.current / 2)} move${
+                    halfMovesAtOpen.current > 2 ? 's' : ''
+                  }) will be lost.`}
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={onNewGame}
+                className="min-h-[52px] rounded-xl bg-red-600 font-semibold text-white transition-colors hover:bg-red-500 active:bg-red-700"
+              >
+                Yes, new game
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingNew(false)}
+                className="min-h-[52px] rounded-xl border border-white/10 bg-[#222838] font-semibold text-gray-200 transition-colors hover:bg-[#2c3449]"
+              >
+                Keep playing
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bottom: the move-list drawer (one scrollable line, opens upward) over one row of controls. */}
       <div className="relative">
@@ -257,7 +305,7 @@ export function HUD() {
           >
             <SpeakerIcon muted={!soundOn} />
           </button>
-          <button type="button" onClick={onNewGame} className={`${BAR_BUTTON} ${BAR_NEUTRAL}`}>
+          <button type="button" onClick={askNewGame} className={`${BAR_BUTTON} ${BAR_NEUTRAL}`}>
             New Game
           </button>
         </div>
