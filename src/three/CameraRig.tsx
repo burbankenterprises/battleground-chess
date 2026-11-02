@@ -51,12 +51,17 @@ export function CameraRig() {
   const controlsRef = useRef<Controls>(null)
   const turn = useGameStore((s) => s.turn)
   const autoFlip = useGameStore((s) => s.autoFlip)
+  const cameraSide = useGameStore((s) => s.cameraSide)
   const cameraShakes = useGameStore((s) => s.cameraShakes)
   const animStartedAt = useGameStore((s) => s.animStartedAt)
   const inputLocked = useGameStore((s) => s.inputLocked)
   const animSeq = useGameStore((s) => s.animSeq)
 
   const anim = useRef({ from: 0, to: 0, start: 0, active: false })
+  /** Azimuth held for network play (null = free orbit / pass-and-play). */
+  const pinnedSide = useRef<number | null>(null)
+  /** When the current pin easing began. */
+  const pinStart = useRef(0)
 
   // Shake offset currently applied to `shakeCamera` (removed after render).
   const shakeApplied = useRef(new Vector3())
@@ -105,11 +110,39 @@ export function CameraRig() {
     anim.current.active = false
   }, [autoFlip])
 
+  // Network games: hold the camera facing the player's own army. The pin is
+  // driven EVERY FRAME in useFrame (below) — an effect could only fire once
+  // and OrbitControls' damping/other effects could cancel or overwrite a
+  // one-shot set (which is exactly what happened: damping re-derives from its
+  // internal spherical state, and the autoFlip-off effect cleared the anim).
+  useEffect(() => {
+    if (!cameraSide) {
+      pinnedSide.current = null
+      return
+    }
+    pinnedSide.current = cameraSide === 'w' ? WHITE_AZIMUTH : BLACK_AZIMUTH
+    pinStart.current = performance.now()
+  }, [cameraSide])
+
   useFrame((state) => {
-    // 1) Auto-flip (unchanged from Phase 1).
+    // 1) Auto-flip (unchanged from Phase 1) + net-game side pin.
     const controls = controlsRef.current
     const a = anim.current
-    if (controls && a.active) {
+    if (controls) (globalThis as { __bgcControls?: Controls }).__bgcControls = controls
+    if (controls && pinnedSide.current !== null) {
+      const from = controls.getAzimuthalAngle()
+      const to = nearestAngle(from, pinnedSide.current)
+      const t = Math.min((performance.now() - pinStart.current) / FLIP_MS, 1)
+      const eased = from + (to - from) * easeInOut(t)
+      controls.setAzimuthalAngle(eased)
+      controls.update()
+      if (t < 1) {
+        // still easing into place
+      } else if (Math.abs(to - from) > 1e-3) {
+        // the user orbited away mid-pin: re-ease from the new angle
+        pinStart.current = performance.now()
+      }
+    } else if (controls && a.active) {
       const t = Math.min((performance.now() - a.start) / FLIP_MS, 1)
       const az = a.from + (a.to - a.from) * easeInOut(t)
       controls.setAzimuthalAngle(az)

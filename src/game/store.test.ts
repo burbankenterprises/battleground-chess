@@ -877,3 +877,23 @@ describe('game store — network play', () => {
     expect(s.autoFlip).toBe(true)
   })
 })
+
+describe('game store — net camera side', () => {
+  it('startNetGame pins cameraSide to our color; endNetGame clears it', () => {
+    useGameStore.getState().startNetGame('b')
+    expect(useGameStore.getState().cameraSide).toBe('b')
+    useGameStore.getState().endNetGame()
+    expect(useGameStore.getState().cameraSide).toBeNull()
+    useGameStore.getState().startNetGame('w')
+    expect(useGameStore.getState().cameraSide).toBe('w')
+    useGameStore.getState().endNetGame()
+  })
+
+  it('faceSide pins without touching net mode', () => {
+    useGameStore.getState().faceSide('b')
+    expect(useGameStore.getState().cameraSide).toBe('b')
+    expect(useGameStore.getState().netMode).toBe('pass')
+    useGameStore.getState().faceSide(null as never) // cleanup guard not needed in pass mode
+    useGameStore.getState().endNetGame()
+  })
+})

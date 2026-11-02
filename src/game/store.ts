@@ -87,6 +87,12 @@ export type GameState = {
   myColor: Color | null
   /** True when it is not our turn in a network game (taps are gated). */
   awaitingOpponent: boolean
+  /**
+   * Camera side to face ('w' | 'b' | null). Pass-and-play leaves null (the
+   * rig follows `turn` when autoFlip is on). Network games pin it to the
+   * player's own color — each device starts facing its own army (Jon, Nov 2026).
+   */
+  cameraSide: Color | null
 
   // ---- read helpers (spec: board(), legalMoves()) ----
   /** Current occupied squares, read live from the chess.js instance. */
@@ -119,6 +125,8 @@ export type GameState = {
   startNetGame: (color: Color) => void
   /** Leave network mode (back to pass-and-play). */
   endNetGame: () => void
+  /** Pin the camera to a side immediately (network games; no flip animation). */
+  faceSide: (color: Color) => void
 
   // ---- animation lifecycle ----
   /**
@@ -271,6 +279,7 @@ export const useGameStore = create<GameState>((set, get) => {
     netMode: 'pass',
     myColor: null,
     awaitingOpponent: false,
+    cameraSide: null,
 
     board: () => flattenBoard(get().game),
 
@@ -404,11 +413,16 @@ export const useGameStore = create<GameState>((set, get) => {
         myColor: color,
         awaitingOpponent: game.turn() !== color,
         autoFlip: false, // each device already faces its own player
+        cameraSide: color, // face OUR army from the first frame
       })
     },
 
     endNetGame: () => {
-      set({ netMode: 'pass', myColor: null, awaitingOpponent: false, autoFlip: true })
+      set({ netMode: 'pass', myColor: null, awaitingOpponent: false, autoFlip: true, cameraSide: null })
+    },
+
+    faceSide: (color) => {
+      set({ cameraSide: color })
     },
 
     settleActor: (id, seq) => {
