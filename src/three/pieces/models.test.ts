@@ -37,11 +37,9 @@ const HEIGHT_BALLPARK: Record<PieceSymbol, readonly [number, number]> = {
   r: [0.55, 0.75],
   n: [0.7, 0.9],
   b: [0.7, 0.9],
-  q: [0.85, 1.05], // the Israelite champion; Goliath is checked against it below
+  q: [0.85, 1.05], // the champion — one shape for both armies
   k: [1.04, 1.12], // king = tallest (Jon, Nov 2026)
 }
-/** Goliath (b queen) vs the Israelite champion — still the biggest fighter, but the KING is tallest (Jon, Nov 2026). */
-const GOLIATH_RATIO_RANGE: readonly [number, number] = [1.0, 1.15]
 
 function meshesOf(root: Object3D): Mesh[] {
   const out: Mesh[] = []
@@ -97,13 +95,13 @@ describe('models — all 12 build', () => {
     expect(buildWarfarePiece('q', 'w')).not.toBe(buildWarfarePiece('q', 'w'))
   })
 
-  it('distinct army variants where the spec asks for them (pawn, bishop, queen)', () => {
-    for (const type of ['p', 'b', 'q'] as const) {
+  it('ONE SHAPE PER TYPE: both armies share geometry exactly (Jon, Nov 2026)', () => {
+    for (const type of ['p', 'r', 'n', 'b', 'q', 'k'] as const) {
       const w = meshesOf(authored(type, 'w')).map((m) => m.geometry)
       const b = meshesOf(authored(type, 'b')).map((m) => m.geometry)
-      // Different builders → the meshes do not line up geometry-for-geometry.
+      // Same builder → identical shared-geometry sequences, army differs by palette only.
       const sameShape = w.length === b.length && w.every((g, i) => g === b[i])
-      expect(sameShape, type).toBe(false)
+      expect(sameShape, type).toBe(true)
     }
   })
 })
@@ -177,12 +175,10 @@ describe('models — dimensions match PIECE_DIMS (topple pivot + shard placement
     }
   })
 
-  it('Goliath towers ~1.25× over the Israelite champion', () => {
-    const champion = new Box3().setFromObject(authored('q', 'w'), true).max.y
-    const goliath = new Box3().setFromObject(authored('q', 'b'), true).max.y
-    const [lo, hi] = GOLIATH_RATIO_RANGE
-    expect(goliath / champion).toBeGreaterThanOrEqual(lo)
-    expect(goliath / champion).toBeLessThanOrEqual(hi)
+  it('both armies share queen height exactly (one shape)', () => {
+    const w = new Box3().setFromObject(authored('q', 'w'), true).max.y
+    const b = new Box3().setFromObject(authored('q', 'b'), true).max.y
+    expect(b).toBeCloseTo(w, 6)
   })
 })
 

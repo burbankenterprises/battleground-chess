@@ -21,15 +21,16 @@ import type { ArmyRole } from './palette'
  * (w) vs Philistines (b), built in code from primitives only (cylinders,
  * boxes, spheres, cones). No external assets, zero licensing risk.
  *
- *   pawn    w: slinger — loaded sling streaming behind a cocked throwing arm, stone bag
- *           b: shield-bearer — round bronze shield braced forward, spear, feathered crown
+ * ONE SHAPE PER TYPE (Jon, Nov 2026): both armies share each type's model —
+ * armies differ by PALETTE ONLY (chess grammar: same type = same shape; the
+ * old w/b asymmetry — slinger vs shield-bearer, prophet vs Dagon priest,
+ * champion vs ×1.25 Goliath — read as mismatched sets across the board).
+ *
+ *   pawn    slinger — loaded sling streaming behind a cocked throwing arm, stone bag
  *   rook    chariot — two wheels, cab with army trim, pole + yoke, javelin-armed charioteer
  *   knight  horseman — horse (legs, barrel, neck, head, mane, tail, army saddle cloth) + spear-armed rider
- *   bishop  w: prophet — robe with tekhelet hem + mantle, hood, beard, shepherd's staff
- *           b: Dagon priest — robe, bronze scale cape, fish-head crown with open jaws, offering bowl
- *   queen   w: mighty-man — raised sword + tekhelet banner, linen cape
- *           b: Goliath — the champion figure ×1.25 in bronze armor, crested helmet,
- *              weaver's-beam spear, javelin slung on his back
+ *   bishop  prophet — robe with hem + mantle, hood, beard, shepherd's staff
+ *   queen   mighty-man — raised sword + banner, cape
  *   king    crowned king seated on a throne atop a two-step dais, twin army banners
  *
  * Contract with PieceActor (see its applyTint + topple pivot):
@@ -86,9 +87,6 @@ const SPHERE_W_SEG = 11
 const SPHERE_H_SEG = 7
 /** Helmet / hair / hood domes (upper hemisphere only). */
 const DOME_H_SEG = 4
-/** Tiny spheres (the fish crown's eyes): an octahedron, 8 tris. */
-const TINY_W_SEG = 4
-const TINY_H_SEG = 2
 
 /**
  * Base emissive strength — same as the Phase 3 placeholders and the shatter
@@ -155,11 +153,6 @@ const FEATHER_CROWN_BROW = 0.023
 const SPEAR_SHAFT_W = 0.024
 const SPEAR_HEAD_R = 0.02
 const SPEAR_HEAD_LEN = 0.05
-/** A beard hangs from the chin: this far below the head center and in front of it. */
-const BEARD_DROP = 0.045
-const BEARD_FORWARD = 0.034
-const BEARD_R = 0.034
-const BEARD_H = 0.07
 
 // ---- Pawn (w): Israelite slinger ----
 
@@ -177,17 +170,6 @@ const STONE_BAG_AT: Vec3 = [-0.088, 0.14, 0]
 
 // ---- Pawn (b): Philistine shield-bearer ----
 
-/** Shield arm braced forward across the body. */
-const SHIELD_ARM_DIR: Vec3 = [0.25, -0.55, -0.8]
-const SHIELD_R = 0.1
-const SHIELD_T = 0.016
-/** Shield center relative to the shield hand: a little up and in front of the fist. */
-const SHIELD_FROM_HAND: Vec3 = [0, 0.012, -0.025]
-const SHIELD_BOSS_R = 0.026
-const SHIELD_BOSS_H = 0.03
-const PAWN_SPEAR_ARM_DIR: Vec3 = [0.3, -0.85, -0.35]
-/** Spear tip just above the feathered crown (figure units). */
-const PAWN_SPEAR_TOP = 0.45
 
 // ---- Rook: chariot ----
 
@@ -306,30 +288,6 @@ const PROPHET_GESTURE_DIR: Vec3 = [-0.35, 0.65, -0.65]
  * pyramid jaws gaping open at the top (a "V" from the side, the classic mitre
  * peak from the front), gill fins on its flanks and two eyes.
  */
-const FISH_HEAD_R = 0.062
-const FISH_HEAD_SCALE: Vec3 = [1, 1.5, 1.2]
-const FISH_HEAD_Y = 0.715
-/** Jaw plates: a 4-sided cone flattened front-to-back into a pointed plate. */
-const JAW_R = 0.054
-const JAW_H = 0.1
-const JAW_FLATTEN = 0.3
-/** Jaw roots sit inside the top of the fish head, each this far fore / aft of center. */
-const JAW_ROOT_Y = 0.775
-const JAW_ROOT_Z = 0.022
-/** How far each jaw gapes open from vertical (rad). */
-const JAW_GAPE = 0.32
-const FIN_SIZE: Vec3 = [0.012, 0.075, 0.05]
-const FIN_AT: Vec3 = [0.066, 0.7, 0.012]
-/** Fins flare outward at the top (rad). */
-const FIN_FLARE = 0.5
-const FISH_EYE_R = 0.012
-const FISH_EYE_AT: Vec3 = [0.05, 0.75, -0.04]
-/** Offering bowl held in both hands in front of the chest (an upturned cone). */
-const BOWL_R = 0.05
-const BOWL_H = 0.04
-const BOWL_AT: Vec3 = [0, 0.44, -0.13]
-/** Each hand grips the bowl this fraction of its radius out from the center. */
-const BOWL_GRIP = 0.6
 
 // ---- Queens: champions ----
 
@@ -338,7 +296,6 @@ const CHAMPION_SCALE = 1.3
 /** Goliath is the champion figure scaled again by this (Phase 4 spec: ~1.25×). */
 // Jon (Nov 2026): the KING must be the tallest piece — Goliath stays the
 // biggest fighter (over the champion, twice a pawn) but sits under the king.
-const GOLIATH_SCALE = 1.05
 /** Banner finial tip (mighty-man) / spear tip (Goliath, before his extra scale), world units. */
 const QUEEN_STAFF_TOP = 0.97
 /** The same tip in figure units, for both champions. */
@@ -361,18 +318,6 @@ const BANNER_FLAG_GAP = 0.005
 const CAPE_SIZE: Vec3 = [0.17, 0.25, 0.018]
 const CAPE_AT: Vec3 = [0, 0.2, 0.08]
 const CAPE_SWING = -0.12
-/** Goliath: crest along the helmet top, bronze javelin slung between the shoulders (1 Sam 17:6). */
-const CREST_SIZE: Vec3 = [0.02, 0.035, 0.12]
-const JAVELIN_W = 0.014
-const JAVELIN_FROM: Vec3 = [-0.11, 0.2, 0.09]
-const JAVELIN_TO: Vec3 = [0.12, 0.42, 0.095]
-const GOLIATH_SPEAR_ARM_DIR: Vec3 = [0.2, -0.88, -0.44]
-/** "The shaft of his spear was like a weaver's beam" (1 Sam 17:7): thicker than any other spear. */
-const GOLIATH_SPEAR_W = 0.038
-const GOLIATH_SPEAR_HEAD_R = 0.036
-const GOLIATH_SPEAR_HEAD_LEN = 0.07
-/** His free fist raised in defiance of the Israelite line (1 Sam 17:10). */
-const GOLIATH_FIST_DIR: Vec3 = [-0.3, 0.9, -0.15]
 
 // ---- King: seated on a throne atop a two-step dais ----
 
@@ -788,36 +733,8 @@ const buildSlinger: Builder = (root, paint) => {
   part(fig, boxGeo(STONE_BAG_SIZE[0], STONE_BAG_SIZE[1], STONE_BAG_SIZE[2]), paint('wood'), STONE_BAG_AT)
 }
 
-/** Pawn (b): Philistine shield-bearer. */
-const buildShieldBearer: Builder = (root, paint) => {
-  plinth(root, paint, PAWN_PLINTH_R)
-  const fig = figureGroup(root, 1, PLINTH_H)
-  figureBody(fig, paint, { legs: 'skin', skirt: 'cloth', torso: 'cloth', belt: 'sash', headgear: 'feathers' })
-  // Round bronze shield braced forward across the body, boss facing the enemy.
-  const shieldHand = arm(fig, paint, LEFT, SHIELD_ARM_DIR).hand
-  const shieldAt = offset(shieldHand, SHIELD_FROM_HAND)
-  const shield = part(
-    fig,
-    cylinderGeo(SHIELD_R, SHIELD_R, SHIELD_T, SEG_LARGE),
-    paint('metal'),
-    shieldAt,
-    [Math.PI / 2, 0, 0], // disc axis along z: the face looks forward
-  )
-  shield.name = FRONT_FEATURE
-  part(
-    fig,
-    coneGeo(SHIELD_BOSS_R, SHIELD_BOSS_H, SEG_SMALL),
-    paint('accent'),
-    [shieldAt[0], shieldAt[1], shieldAt[2] - SHIELD_T / 2 - SHIELD_BOSS_H / 2],
-    [-Math.PI / 2, 0, 0], // apex toward -z
-  )
-  // Spear grounded beside the right foot.
-  const spearHand = arm(fig, paint, RIGHT, PAWN_SPEAR_ARM_DIR).hand
-  uprightSpear(fig, paint, spearHand[0], spearHand[2], 0, PAWN_SPEAR_TOP)
-}
-
 /** Rook: chariot with army trim and a javelin-armed charioteer. */
-const buildChariot: Builder = (root, paint, army) => {
+const buildChariot: Builder = (root, paint) => {
   plinth(root, paint, ROOK_PLINTH_R)
   for (const side of SIDES) {
     part(
@@ -872,7 +789,7 @@ const buildChariot: Builder = (root, paint, army) => {
     skirt: null,
     torso: 'cloth',
     belt: null,
-    headgear: army === 'w' ? 'dome' : 'feathers',
+    headgear: 'dome',
   })
   arm(fig, paint, LEFT, REINS_ARM_DIR)
   const spearHand = arm(fig, paint, RIGHT, CHARIOTEER_SPEAR_ARM_DIR).hand
@@ -887,7 +804,7 @@ const buildChariot: Builder = (root, paint, army) => {
 }
 
 /** Knight: horseman — horse with army saddle cloth and a spear-armed rider. */
-const buildHorseman: Builder = (root, paint, army) => {
+const buildHorseman: Builder = (root, paint) => {
   plinth(root, paint, KNIGHT_PLINTH_R)
   const mount = paint('mount')
   for (const z of [HORSE_FRONT_LEG_Z, HORSE_REAR_LEG_Z]) {
@@ -931,7 +848,7 @@ const buildHorseman: Builder = (root, paint, army) => {
     skirt: null,
     torso: 'cloth',
     belt: null,
-    headgear: army === 'w' ? 'dome' : 'feathers',
+    headgear: 'dome',
   })
   arm(fig, paint, LEFT, REINS_ARM_DIR)
   const spearHand = arm(fig, paint, RIGHT, RIDER_SPEAR_ARM_DIR).hand
@@ -993,52 +910,6 @@ const buildProphet: Builder = (root, paint) => {
   limb(root, sleeve, robedShoulder(LEFT), PROPHET_GESTURE_DIR, ROBED_ARM_LEN, ROBED_ARM_W)
 }
 
-/** Bishop (b): priest of Dagon in a fish-head crown. */
-const buildDagonPriest: Builder = (root, paint) => {
-  robedFigure(root, paint, 'metal', 'metal') // bronze hem + bronze "fish-scale" cape
-  const bronze = paint('metal')
-  part(root, sphereGeo(FISH_HEAD_R), bronze, [0, FISH_HEAD_Y, 0], undefined, FISH_HEAD_SCALE)
-  // Open jaws: each flat pyramid is rooted inside the head top and gapes
-  // outward (front jaw toward -z, back jaw toward +z).
-  for (const gape of [-JAW_GAPE, JAW_GAPE]) {
-    const rootZ = Math.sign(gape) * JAW_ROOT_Z
-    part(
-      root,
-      coneGeo(JAW_R, JAW_H, SEG_TIP),
-      bronze,
-      [0, JAW_ROOT_Y + (JAW_H / 2) * Math.cos(gape), rootZ + (JAW_H / 2) * Math.sin(gape)],
-      [gape, 0, 0],
-      [1, 1, JAW_FLATTEN],
-    )
-  }
-  for (const side of SIDES) {
-    part(
-      root,
-      boxGeo(FIN_SIZE[0], FIN_SIZE[1], FIN_SIZE[2]),
-      paint('accent'),
-      [side * FIN_AT[0], FIN_AT[1], FIN_AT[2]],
-      [0, 0, -side * FIN_FLARE],
-    )
-    part(root, sphereGeo(FISH_EYE_R, TINY_W_SEG, TINY_H_SEG), paint('hair'), [
-      side * FISH_EYE_AT[0],
-      FISH_EYE_AT[1],
-      FISH_EYE_AT[2],
-    ])
-  }
-  // Offering bowl held forward in both hands.
-  const sleeve = paint('cloth')
-  for (const side of SIDES) {
-    const shoulder = robedShoulder(side)
-    const toBowl: Vec3 = [
-      BOWL_AT[0] + side * BOWL_R * BOWL_GRIP - shoulder[0],
-      BOWL_AT[1] - shoulder[1],
-      BOWL_AT[2] - shoulder[2],
-    ]
-    limb(root, sleeve, shoulder, toBowl, ROBED_ARM_LEN, ROBED_ARM_W)
-  }
-  part(root, coneGeo(BOWL_R, BOWL_H, SEG_SMALL), bronze, BOWL_AT, [Math.PI, 0, 0]).name = FRONT_FEATURE
-}
-
 /** Queen (w): Israelite mighty-man with a raised sword and the tekhelet banner. */
 const buildMightyMan: Builder = (root, paint) => {
   plinth(root, paint, QUEEN_PLINTH_R)
@@ -1081,31 +952,6 @@ const buildMightyMan: Builder = (root, paint) => {
     poleTop - BANNER_FLAG_GAP - BANNER_FLAG_SIZE[1] / 2,
     poleHand[2],
   ])
-}
-
-/** Queen (b): Goliath of Gath — the champion figure ×1.25 in bronze, with his great spear. */
-const buildGoliath: Builder = (root, paint) => {
-  plinth(root, paint, QUEEN_PLINTH_R)
-  const fig = figureGroup(root, CHAMPION_SCALE * GOLIATH_SCALE, PLINTH_H)
-  // Bronze greaves, crimson kilt, bronze coat of scale armor, bronze helmet (1 Sam 17:5–6).
-  figureBody(fig, paint, { legs: 'metal', skirt: 'cloth', torso: 'metal', belt: 'accent', headgear: 'dome' })
-  part(fig, boxGeo(CREST_SIZE[0], CREST_SIZE[1], CREST_SIZE[2]), paint('accent'), [0, HEAD_Y + DOME_R, 0])
-  beard(fig, paint, [0, HEAD_Y - BEARD_DROP, -BEARD_FORWARD], BEARD_R, BEARD_H)
-  between(fig, (len) => boxGeo(JAVELIN_W, len, JAVELIN_W), paint('metal'), JAVELIN_FROM, JAVELIN_TO)
-  const spearHand = arm(fig, paint, RIGHT, GOLIATH_SPEAR_ARM_DIR).hand
-  uprightSpear(
-    fig,
-    paint,
-    spearHand[0],
-    spearHand[2],
-    0,
-    QUEEN_STAFF_TOP_FIG,
-    GOLIATH_SPEAR_W,
-    GOLIATH_SPEAR_HEAD_R,
-    GOLIATH_SPEAR_HEAD_LEN,
-    SEG_SMALL,
-  ).name = FRONT_FEATURE
-  arm(fig, paint, LEFT, GOLIATH_FIST_DIR)
 }
 
 /** King: crowned, seated on a throne atop a two-step dais, twin army banners behind. */
@@ -1194,11 +1040,11 @@ const BUILDERS: Record<Army, Record<PieceSymbol, Builder>> = {
     k: buildKing,
   },
   b: {
-    p: buildShieldBearer,
+    p: buildSlinger,
     r: buildChariot,
     n: buildHorseman,
-    b: buildDagonPriest,
-    q: buildGoliath,
+    b: buildProphet,
+    q: buildMightyMan,
     k: buildKing,
   },
 }

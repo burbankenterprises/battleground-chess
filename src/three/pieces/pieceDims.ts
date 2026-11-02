@@ -24,6 +24,6 @@ export const PIECE_DIMS: Record<PieceSymbol, { radius: number; height: number }>
   r: { radius: 0.28, height: 0.66 },
   n: { radius: 0.28, height: 0.81 },
   b: { radius: 0.21, height: 0.87 },
-  q: { radius: 0.28, height: 1.06 },
+  q: { radius: 0.28, height: 0.97 },
   k: { radius: 0.29, height: 1.1 },
 }
