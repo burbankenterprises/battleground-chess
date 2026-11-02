@@ -24,7 +24,7 @@ export const ARMY_PALETTE: Record<
   // Philistine deep crimson — the dominant garment tone of the dark army. Kept
   // this deep so it reads darker than even the darkest weathered stone tile
   // (perceptual check in boardTheme.test.ts).
-  b: { color: '#64121c', metalness: 0, roughness: 0.75, emissive: '#0b0d12' },
+  b: { color: '#6a1721', metalness: 0, roughness: 0.75, emissive: '#0b0d12' },
 }
 
 /** Sandy tone dust is blended toward so dark-army dust still reads on the board. */
@@ -88,15 +88,15 @@ export const ARMY_THEME: Record<Color, Record<ArmyRole, MaterialSpec>> = {
   // Philistines: deep crimson, bronze, iron, dark basalt.
   b: {
     cloth: { color: ARMY_PALETTE.b.color, metalness: 0, roughness: 0.75 },
-    sash: { color: '#a06a35', metalness: 0.55, roughness: 0.38 },
-    accent: { color: '#8e1d29', metalness: 0, roughness: 0.7 },
-    metal: { color: '#a06a35', metalness: 0.55, roughness: 0.38 },
-    blade: { color: '#5a5d63', metalness: 0.5, roughness: 0.42 },
-    wood: { color: '#4a3326', metalness: 0, roughness: 0.75 },
-    throne: { color: '#3a2a20', metalness: 0, roughness: 0.65 },
+    sash: { color: '#b07c42', metalness: 0.55, roughness: 0.38 },
+    accent: { color: '#a32230', metalness: 0, roughness: 0.7 },
+    metal: { color: '#b07c42', metalness: 0.55, roughness: 0.38 },
+    blade: { color: '#787c84', metalness: 0.5, roughness: 0.42 },
+    wood: { color: '#6b4a35', metalness: 0, roughness: 0.75 },
+    throne: { color: '#5a4636', metalness: 0, roughness: 0.65 },
     skin: SKIN,
-    hair: { color: '#1f1814', metalness: 0, roughness: 0.85 },
-    plinth: { color: '#2d2523', metalness: 0.05, roughness: 0.8 },
-    mount: { color: '#3d2a20', metalness: 0, roughness: 0.75 },
+    hair: { color: '#3a2e26', metalness: 0, roughness: 0.85 },
+    plinth: { color: '#4a3d38', metalness: 0.05, roughness: 0.8 },
+    mount: { color: '#5e4433', metalness: 0, roughness: 0.75 },
   },
 }
