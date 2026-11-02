@@ -336,7 +336,9 @@ const BOWL_GRIP = 0.6
 /** The mighty-man is the standard figure at this scale. */
 const CHAMPION_SCALE = 1.3
 /** Goliath is the champion figure scaled again by this (Phase 4 spec: ~1.25×). */
-const GOLIATH_SCALE = 1.25
+// Jon (Nov 2026): the KING must be the tallest piece — Goliath stays the
+// biggest fighter (over the champion, twice a pawn) but sits under the king.
+const GOLIATH_SCALE = 1.05
 /** Banner finial tip (mighty-man) / spear tip (Goliath, before his extra scale), world units. */
 const QUEEN_STAFF_TOP = 0.97
 /** The same tip in figure units, for both champions. */
@@ -386,7 +388,7 @@ const THRONE_BACK_SIZE: Vec3 = [0.27, 0.34, 0.04]
 const THRONE_BACK_Z = 0.12
 /** Twin banner poles rising from (and rooted inside) the throne back's corners. */
 const KING_BANNER_X = 0.1
-const KING_BANNER_TOP = 1.03
+const KING_BANNER_TOP = 1.1
 const KING_BANNER_ROOT_Y = 0.5
 const KING_BANNER_POLE_W = 0.024
 /** Flags fly outward from each pole, just under its tip. */

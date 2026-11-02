@@ -38,10 +38,10 @@ const HEIGHT_BALLPARK: Record<PieceSymbol, readonly [number, number]> = {
   n: [0.7, 0.9],
   b: [0.7, 0.9],
   q: [0.85, 1.05], // the Israelite champion; Goliath is checked against it below
-  k: [0.95, 1.1],
+  k: [1.04, 1.12], // king = tallest (Jon, Nov 2026)
 }
-/** Goliath (b queen) vs the Israelite champion — spec: ~1.25×. */
-const GOLIATH_RATIO_RANGE: readonly [number, number] = [1.15, 1.35]
+/** Goliath (b queen) vs the Israelite champion — still the biggest fighter, but the KING is tallest (Jon, Nov 2026). */
+const GOLIATH_RATIO_RANGE: readonly [number, number] = [1.0, 1.15]
 
 function meshesOf(root: Object3D): Mesh[] {
   const out: Mesh[] = []

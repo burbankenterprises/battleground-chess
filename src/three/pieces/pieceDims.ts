@@ -16,14 +16,14 @@ import type { PieceSymbol } from 'chess.js'
  *     r  chariot 0.660 (javelin tip), both armies
  *     n  horseman 0.810 (spear tip), both armies
  *     b  prophet 0.839 (staff crook) · Dagon priest 0.870 (fish-crown jaws)
- *     q  mighty-man 0.970 (banner finial) · Goliath 1.203 (spear tip, the champion ×1.25)
- *     k  enthroned king 1.030 (banner tips), both armies
+ *     q  mighty-man 0.970 (banner finial) · Goliath ~1.01 (spear tip, champion ×1.05)
+ *     k  enthroned king 1.100 (banner tips), both armies — the KING is tallest (Jon, Nov 2026)
  */
 export const PIECE_DIMS: Record<PieceSymbol, { radius: number; height: number }> = {
   p: { radius: 0.22, height: 0.5 },
   r: { radius: 0.28, height: 0.66 },
   n: { radius: 0.28, height: 0.81 },
   b: { radius: 0.21, height: 0.87 },
-  q: { radius: 0.28, height: 1.21 },
-  k: { radius: 0.29, height: 1.03 },
+  q: { radius: 0.28, height: 1.06 },
+  k: { radius: 0.29, height: 1.1 },
 }
