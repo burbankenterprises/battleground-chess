@@ -801,3 +801,79 @@ describe('game store — Phase 6 draw-rule QA (reach draws through real taps)', 
     expect(useGameStore.getState().status).toBe('draw')
   })
 })
+
+describe('game store — network play', () => {
+  beforeEach(() => {
+    useGameStore.getState().newGame()
+    useGameStore.getState().endNetGame()
+    useGameStore.getState().settleAnimations()
+  })
+
+  it('startNetGame as black gates white-square taps (not our turn)', () => {
+    useGameStore.getState().startNetGame('b')
+    useGameStore.getState().settleAnimations()
+    const s = useGameStore.getState()
+    expect(s.netMode).toBe('net')
+    expect(s.myColor).toBe('b')
+    expect(s.awaitingOpponent).toBe(true)
+    expect(s.autoFlip).toBe(false)
+    // While it is white's move, ALL taps are ignored for us — even our own pieces.
+    useGameStore.getState().handleTap('e2')
+    expect(useGameStore.getState().selectedSquare).toBeNull()
+    useGameStore.getState().handleTap('e7')
+    expect(useGameStore.getState().selectedSquare).toBeNull()
+    // White's move arrives over the wire — now it is our turn.
+    useGameStore.getState().applyRemoteSan('e4')
+    useGameStore.getState().settleAnimations()
+    expect(useGameStore.getState().awaitingOpponent).toBe(false)
+    useGameStore.getState().handleTap('e7')
+    expect(useGameStore.getState().selectedSquare).toBe('e7')
+    useGameStore.getState().clearSelection()
+  })
+
+  it('startNetGame as white: our move lands, awaitingOpponent flips', () => {
+    useGameStore.getState().startNetGame('w')
+    useGameStore.getState().settleAnimations()
+    expect(useGameStore.getState().awaitingOpponent).toBe(false)
+    useGameStore.getState().settleAnimations()
+    useGameStore.getState().handleTap('e2')
+    useGameStore.getState().handleTap('e4')
+    useGameStore.getState().settleAnimations()
+    const s = useGameStore.getState()
+    expect(s.moveHistory).toEqual(['e4'])
+    expect(s.awaitingOpponent).toBe(true) // black to move = opponent
+    // White cannot move black's pawn now.
+    useGameStore.getState().handleTap('d7')
+    expect(useGameStore.getState().selectedSquare).toBeNull()
+  })
+
+  it('applyRemoteSan plays a legal opponent move through the same pipeline', () => {
+    useGameStore.getState().startNetGame('w')
+    useGameStore.getState().settleAnimations()
+    useGameStore.getState().settleAnimations()
+    useGameStore.getState().handleTap('e2')
+    useGameStore.getState().handleTap('e4')
+    useGameStore.getState().settleAnimations()
+    const move = useGameStore.getState().applyRemoteSan('e5')
+    useGameStore.getState().settleAnimations()
+    expect(move?.san).toBe('e5')
+    const s = useGameStore.getState()
+    expect(s.moveHistory).toEqual(['e4', 'e5'])
+    expect(s.awaitingOpponent).toBe(false) // white (us) to move again
+  })
+
+  it('applyRemoteSan rejects an illegal/foreign SAN silently', () => {
+    useGameStore.getState().startNetGame('w')
+    expect(useGameStore.getState().applyRemoteSan('Ke8')).toBeNull()
+    expect(useGameStore.getState().moveHistory).toEqual([])
+  })
+
+  it('endNetGame returns to pass-and-play', () => {
+    useGameStore.getState().startNetGame('b')
+    useGameStore.getState().endNetGame()
+    const s = useGameStore.getState()
+    expect(s.netMode).toBe('pass')
+    expect(s.myColor).toBeNull()
+    expect(s.autoFlip).toBe(true)
+  })
+})

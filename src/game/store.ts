@@ -80,6 +80,13 @@ export type GameState = {
   pendingPromotion: PendingPromotion | null
   /** Whether the camera auto-flips to the active player on each turn. */
   autoFlip: boolean
+  // ---- network play (two devices; see src/net/) ----
+  /** 'pass' = same device; 'host'/'guest' = network game, our army color implied. */
+  netMode: 'pass' | 'net'
+  /** Our army color in a network game (null in pass-and-play). */
+  myColor: Color | null
+  /** True when it is not our turn in a network game (taps are gated). */
+  awaitingOpponent: boolean
 
   // ---- read helpers (spec: board(), legalMoves()) ----
   /** Current occupied squares, read live from the chess.js instance. */
@@ -106,6 +113,12 @@ export type GameState = {
   newGame: () => void
   /** Toggle pass-and-play camera auto-flip. */
   toggleAutoFlip: () => void
+  /** Apply an opponent move (SAN) arriving over the network. */
+  applyRemoteSan: (san: string) => Move | null
+  /** Enter network mode as `color`; leaves pass-and-play. */
+  startNetGame: (color: Color) => void
+  /** Leave network mode (back to pass-and-play). */
+  endNetGame: () => void
 
   // ---- animation lifecycle ----
   /**
@@ -255,6 +268,9 @@ export const useGameStore = create<GameState>((set, get) => {
     selectedSquare: null,
     pendingPromotion: null,
     autoFlip: true,
+    netMode: 'pass',
+    myColor: null,
+    awaitingOpponent: false,
 
     board: () => flattenBoard(get().game),
 
@@ -289,14 +305,21 @@ export const useGameStore = create<GameState>((set, get) => {
         commands = []
       }
       startBatch(commands, { selectedSquare: null, pendingPromotion: null })
+      // Network games: our move just landed — now we await the opponent.
+      const { netMode, myColor } = get()
+      if (netMode === 'net' && myColor) {
+        set({ awaitingOpponent: game.turn() !== myColor })
+      }
       return move
     },
 
     handleTap: (square) => {
-      const { game: g, selectedSquare, inputLocked } = get()
+      const { game: g, selectedSquare, inputLocked, netMode, myColor } = get()
       // Taps are ignored while pieces are still animating a move.
       if (inputLocked) return
       const turn = g.turn()
+      // Network games: only the player on move may act.
+      if (netMode === 'net' && myColor && turn !== myColor) return
       const piece = g.get(square)
 
       // Nothing selected yet: select only an own piece.
@@ -363,6 +386,30 @@ export const useGameStore = create<GameState>((set, get) => {
     },
 
     toggleAutoFlip: () => set((s) => ({ autoFlip: !s.autoFlip })),
+
+    applyRemoteSan: (san) => {
+      // The relay only carries SAN strings; chess.js validates them.
+      const { game: g, inputLocked } = get()
+      if (inputLocked) return null
+      const from = g.moves({ verbose: true }).find((m) => m.san === san)
+      if (!from) return null
+      return get().tryMove(from.from, from.to, from.promotion)
+    },
+
+    startNetGame: (color) => {
+      game.reset()
+      resetToBoard()
+      set({
+        netMode: 'net',
+        myColor: color,
+        awaitingOpponent: game.turn() !== color,
+        autoFlip: false, // each device already faces its own player
+      })
+    },
+
+    endNetGame: () => {
+      set({ netMode: 'pass', myColor: null, awaitingOpponent: false, autoFlip: true })
+    },
 
     settleActor: (id, seq) => {
       if (seq !== undefined && seq !== get().animSeq) return
