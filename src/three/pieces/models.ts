@@ -82,8 +82,8 @@ const SEG_SMALL = 12
 /** Radial segments for tiny cones (spear heads, tail, finial) and the flat pyramid jaw plates. */
 const SEG_TIP = 6
 /** Head spheres: smooth enough to read as a head, not a ball of facets. */
-const SPHERE_W_SEG = 12
-const SPHERE_H_SEG = 8
+const SPHERE_W_SEG = 11
+const SPHERE_H_SEG = 7
 /** Helmet / hair / hood domes (upper hemisphere only). */
 const DOME_H_SEG = 4
 /** Tiny spheres (the fish crown's eyes): an octahedron, 8 tris. */
@@ -140,16 +140,19 @@ const ARM_W = 0.037
 const ARM_LEN = 0.14
 /** Helmet / hair dome radius (just over the head radius, so it reads as a cap). */
 const DOME_R = 0.061
+/** Helmet spike (dome headgear): the warrior point at board distance. */
+const SPIKE_R = 0.016
+const SPIKE_H = 0.05
 /** Hair is tilted back so the forehead shows and the nape is covered. */
 const HAIR_TILT = 0.3
 /** Philistine feathered crown (the Peleset headdress): a band flaring upward. */
 const FEATHER_CROWN_BOTTOM_R = 0.052
-const FEATHER_CROWN_TOP_R = 0.075
-const FEATHER_CROWN_H = 0.075
+const FEATHER_CROWN_TOP_R = 0.088
+const FEATHER_CROWN_H = 0.085
 /** The crown band starts this far above the head center (just over the brow). */
-const FEATHER_CROWN_BROW = 0.025
+const FEATHER_CROWN_BROW = 0.023
 /** Upright spears / javelins: shaft width, head radius and head length. */
-const SPEAR_SHAFT_W = 0.016
+const SPEAR_SHAFT_W = 0.024
 const SPEAR_HEAD_R = 0.02
 const SPEAR_HEAD_LEN = 0.05
 /** A beard hangs from the chin: this far below the head center and in front of it. */
@@ -166,8 +169,8 @@ const SLINGER_THROW_DIR: Vec3 = [0.4, 0.8, 0.3]
 const SLINGER_AIM_DIR: Vec3 = [-0.2, -0.3, -0.93]
 /** The loaded pouch streams behind the throwing hand, mid-swing. */
 const SLING_REACH: Vec3 = [-0.04, 0, 0.1]
-const SLING_CORD_W = 0.016
-const SLING_POUCH = 0.042
+const SLING_CORD_W = 0.03
+const SLING_POUCH = 0.048
 /** Bag of sling stones at the left hip. */
 const STONE_BAG_SIZE: Vec3 = [0.045, 0.055, 0.035]
 const STONE_BAG_AT: Vec3 = [-0.088, 0.14, 0]
@@ -205,6 +208,10 @@ const CAB_RAIL_H = 0.025
 /** How far the trim / rail stand proud of the cab walls (each side). */
 const CAB_TRIM_PROUD = 0.006
 const CAB_RAIL_PROUD = 0.01
+/** Castellated rail (rook marker): merlon width/height/spacing on the cab rail. */
+const CRENEL_RUN_W = CAB_W + 2 * CAB_RAIL_PROUD
+const CRENEL_H = 0.055
+const CRENEL_T = 0.05
 const POLE_W = 0.026
 /** The pole leaves the cab front low and rises slightly toward the yoke. */
 const POLE_ROOT_Y = 0.17
@@ -257,7 +264,7 @@ const RIDER_LEGS_DROP = 0.03
 const RIDER_SEAT = 0.015
 const RIDER_SPEAR_ARM_DIR: Vec3 = [0.35, -0.6, -0.4]
 const HORSEMAN_SPEAR_BOTTOM = 0.25
-const HORSEMAN_SPEAR_TOP = 0.81
+const HORSEMAN_SPEAR_TOP = 0.80
 const HORSEMAN_SPEAR_HEAD_LEN = 0.055
 
 // ---- Bishops: robed figures (world units) ----
@@ -284,10 +291,10 @@ const ROBED_BEARD_R = 0.036
 const ROBED_BEARD_H = 0.085
 const ROBED_BEARD_AT: Vec3 = [0, 0.548, -0.038]
 /** Prophet: linen hood over the head, tilted back like the hair. */
-const HOOD_R = 0.064
+const HOOD_R = 0.068
 const HOOD_TILT = 0.35
 const PROPHET_STAFF_ARM_DIR: Vec3 = [0.3, -0.6, -0.75]
-const PROPHET_STAFF_W = 0.022
+const PROPHET_STAFF_W = 0.034
 const PROPHET_STAFF_TOP = 0.8
 /** Shepherd's crook: a short hooked segment at the staff top. */
 const PROPHET_CROOK: Vec3 = [-0.04, 0.03, 0]
@@ -303,7 +310,7 @@ const FISH_HEAD_R = 0.062
 const FISH_HEAD_SCALE: Vec3 = [1, 1.5, 1.2]
 const FISH_HEAD_Y = 0.715
 /** Jaw plates: a 4-sided cone flattened front-to-back into a pointed plate. */
-const JAW_R = 0.05
+const JAW_R = 0.054
 const JAW_H = 0.1
 const JAW_FLATTEN = 0.3
 /** Jaw roots sit inside the top of the fish head, each this far fore / aft of center. */
@@ -336,17 +343,17 @@ const QUEEN_STAFF_TOP = 0.97
 const QUEEN_STAFF_TOP_FIG = (QUEEN_STAFF_TOP - PLINTH_H) / CHAMPION_SCALE
 const SWORD_ARM_DIR: Vec3 = [0.45, 0.8, -0.3]
 const SWORD_DIR: Vec3 = [0.05, 1, -0.2]
-const SWORD_BLADE_LEN = 0.2
-const SWORD_BLADE_W = 0.022
-const SWORD_BLADE_T = 0.008
+const SWORD_BLADE_LEN = 0.28
+const SWORD_BLADE_W = 0.034
+const SWORD_BLADE_T = 0.014
 const SWORD_GUARD_W = 0.075
-const SWORD_GUARD_T = 0.014
+const SWORD_GUARD_T = 0.02
 const BANNER_ARM_DIR: Vec3 = [-0.35, -0.5, -0.5]
-const BANNER_POLE_W = 0.016
-const BANNER_FINIAL_R = 0.02
-const BANNER_FINIAL_H = 0.045
+const BANNER_POLE_W = 0.024
+const BANNER_FINIAL_R = 0.028
+const BANNER_FINIAL_H = 0.06
 /** The flag flies from the pole top toward the figure's midline, above the head. */
-const BANNER_FLAG_SIZE: Vec3 = [0.135, 0.09, 0.006]
+const BANNER_FLAG_SIZE: Vec3 = [0.17, 0.12, 0.008]
 const BANNER_FLAG_GAP = 0.005
 /** Cape hanging down the back, its hem swinging out a little (rad). */
 const CAPE_SIZE: Vec3 = [0.17, 0.25, 0.018]
@@ -359,8 +366,8 @@ const JAVELIN_FROM: Vec3 = [-0.11, 0.2, 0.09]
 const JAVELIN_TO: Vec3 = [0.12, 0.42, 0.095]
 const GOLIATH_SPEAR_ARM_DIR: Vec3 = [0.2, -0.88, -0.44]
 /** "The shaft of his spear was like a weaver's beam" (1 Sam 17:7): thicker than any other spear. */
-const GOLIATH_SPEAR_W = 0.028
-const GOLIATH_SPEAR_HEAD_R = 0.03
+const GOLIATH_SPEAR_W = 0.038
+const GOLIATH_SPEAR_HEAD_R = 0.036
 const GOLIATH_SPEAR_HEAD_LEN = 0.07
 /** His free fist raised in defiance of the Israelite line (1 Sam 17:10). */
 const GOLIATH_FIST_DIR: Vec3 = [-0.3, 0.9, -0.15]
@@ -378,12 +385,12 @@ const THRONE_SEAT_TOP = DAIS_TOP + THRONE_SEAT_SIZE[1]
 const THRONE_BACK_SIZE: Vec3 = [0.27, 0.34, 0.04]
 const THRONE_BACK_Z = 0.12
 /** Twin banner poles rising from (and rooted inside) the throne back's corners. */
-const KING_BANNER_X = 0.115
+const KING_BANNER_X = 0.1
 const KING_BANNER_TOP = 1.03
 const KING_BANNER_ROOT_Y = 0.5
-const KING_BANNER_POLE_W = 0.016
+const KING_BANNER_POLE_W = 0.024
 /** Flags fly outward from each pole, just under its tip. */
-const KING_FLAG_SIZE: Vec3 = [0.12, 0.085, 0.006]
+const KING_FLAG_SIZE: Vec3 = [0.14, 0.1, 0.008]
 const KING_FLAG_GAP = 0.005
 const KING_LAP_SIZE: Vec3 = [0.19, 0.065, 0.17]
 const KING_LAP_AT: Vec3 = [0, 0.2525, -0.015]
@@ -401,10 +408,13 @@ const KING_BEARD_R = 0.04
 const KING_BEARD_H = 0.08
 const KING_BEARD_AT: Vec3 = [0, 0.488, -0.022]
 /** Crown: a flared gold / bronze band seated on the head. */
-const KING_CROWN_TOP_R = 0.073
-const KING_CROWN_BOTTOM_R = 0.061
-const KING_CROWN_H = 0.075
+const KING_CROWN_TOP_R = 0.058
+const KING_CROWN_BOTTOM_R = 0.064
+const KING_CROWN_H = 0.11
 const KING_CROWN_BOTTOM_Y = 0.565
+/** Crown points (king marker): 5 accent cones around the crown rim. */
+const CROWN_POINT_R = 0.014
+const CROWN_POINT_H = 0.05
 const KING_SHOULDER: Vec3 = [0.1, 0.46, 0.035]
 /** Arms rest forward on the knees. */
 const KING_ARM_DIR: Vec3 = [0.12, -0.8, -0.55]
@@ -675,6 +685,8 @@ function headgear(fig: Object3D, paint: Paint, kind: Headgear): void {
       return
     case 'dome':
       part(fig, domeGeo(DOME_R), paint('metal'), [0, HEAD_Y, 0])
+      // Helmet spike: the warrior read at distance (champion / Goliath).
+      part(fig, coneGeo(SPIKE_R, SPIKE_H, SEG_TIP), paint('metal'), [0, HEAD_Y + DOME_R + SPIKE_H / 2, 0])
       return
     case 'feathers':
       part(
@@ -808,7 +820,7 @@ const buildChariot: Builder = (root, paint, army) => {
   for (const side of SIDES) {
     part(
       root,
-      cylinderGeo(WHEEL_R, WHEEL_R, WHEEL_T, SEG_LARGE),
+      cylinderGeo(WHEEL_R, WHEEL_R, WHEEL_T, 14),
       paint('wood'),
       [side * WHEEL_X, PLINTH_H + WHEEL_R, AXLE_Z],
       [0, 0, Math.PI / 2], // wheel axis along x
@@ -827,6 +839,19 @@ const buildChariot: Builder = (root, paint, army) => {
     boxGeo(CAB_W + 2 * CAB_RAIL_PROUD, CAB_RAIL_H, CAB_D + 2 * CAB_RAIL_PROUD),
     paint('metal'),
     [0, CAB_BOTTOM_Y + CAB_H, CAB_Z],
+  )
+  // Castellations: merlons on front + back rails — the ROOK read (castle wall).
+  part(
+    root,
+    boxGeo(CRENEL_RUN_W, CRENEL_H, CRENEL_T),
+    paint('metal'),
+    [0, CAB_BOTTOM_Y + CAB_H + CAB_RAIL_H + CRENEL_H / 2, CAB_Z - (CAB_D / 2 + CAB_RAIL_PROUD) + CRENEL_T / 2],
+  )
+  part(
+    root,
+    boxGeo(CRENEL_RUN_W, CRENEL_H, CRENEL_T),
+    paint('metal'),
+    [0, CAB_BOTTOM_Y + CAB_H + CAB_RAIL_H + CRENEL_H / 2, CAB_Z + (CAB_D / 2 + CAB_RAIL_PROUD) - CRENEL_T / 2],
   )
   // Draught pole and yoke reach toward the enemy.
   between(
@@ -1136,6 +1161,20 @@ const buildKing: Builder = (root, paint) => {
     KING_CROWN_BOTTOM_Y + KING_CROWN_H / 2,
     KING_HEAD_AT[2],
   ])
+  // Crown points: 5 bright cones around the crown rim — THE king marker.
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2
+    part(
+      root,
+      coneGeo(CROWN_POINT_R, CROWN_POINT_H, SEG_TIP),
+      paint('accent'),
+      [
+        KING_HEAD_AT[0] + Math.cos(a) * KING_CROWN_TOP_R,
+        KING_CROWN_BOTTOM_Y + KING_CROWN_H + CROWN_POINT_H / 2,
+        KING_HEAD_AT[2] + Math.sin(a) * KING_CROWN_TOP_R,
+      ],
+    )
+  }
   for (const side of SIDES) {
     const shoulder: Vec3 = [side * KING_SHOULDER[0], KING_SHOULDER[1], KING_SHOULDER[2]]
     const dir: Vec3 = [side * KING_ARM_DIR[0], KING_ARM_DIR[1], KING_ARM_DIR[2]]
